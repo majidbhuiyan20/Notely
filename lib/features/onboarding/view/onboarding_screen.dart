@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:notely/features/home/view/home_screen.dart';
 
 class OnboardingScreen extends StatelessWidget {
   const OnboardingScreen({super.key});
@@ -40,7 +41,8 @@ class OnboardingScreen extends StatelessWidget {
               const Spacer(),
               ElevatedButton(
                 onPressed: () {
-                  // Navigate to next screen or authentication
+                  Navigator.pushReplacement(context, MaterialPageRoute(builder: (_)=> HomeScreen(
+                  )));
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFD9E9FF), // Example color
