@@ -1,22 +1,23 @@
 import 'package:flutter/material.dart';
-import 'package:notely/features/home/home_screen.dart';
+import 'package:notely/features/splash/view/splash_screen.dart';
 
 void main() {
   runApp(const MyApp());
 }
 
-
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       title: 'Notely',
       theme: ThemeData(
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        useMaterial3: true,
       ),
-      home: HomeScreen(),
+      home: const SplashScreen(),
     );
   }
 }
-
