@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../widgets/category_card.dart';
 import '../../widgets/search_field.dart';
+import '../../widgets/title_section.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -47,24 +48,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 SearchField(),
 
                 const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      "Categories",
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    TextButton(
-                      onPressed: () {},
-                      child: const Text(
-                        "See All",
-                        style: TextStyle(color: Colors.blue, fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                  ],
-                ),
+                TitleSection(title: 'Categories',),
                 const SizedBox(height: 16),
-
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
@@ -103,6 +88,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                 ),
+                const SizedBox(height: 16),
+                TitleSection(title: 'Pined Note'),
+                const SizedBox(height: 16),
               ],
             ),
           ),
@@ -111,7 +99,5 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
-
-
 
 
