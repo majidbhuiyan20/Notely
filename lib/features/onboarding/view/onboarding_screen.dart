@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:notely/features/home/view/home_screen.dart';
+import '../view/onboarding_screen.dart'; // This import seems wrong in the previous version, it was importing itself or HomeScreen.
+import '../../main/view/main_screen.dart';
 
 class OnboardingScreen extends StatelessWidget {
   const OnboardingScreen({super.key});
@@ -41,11 +42,13 @@ class OnboardingScreen extends StatelessWidget {
               const Spacer(),
               ElevatedButton(
                 onPressed: () {
-                  Navigator.pushReplacement(context, MaterialPageRoute(builder: (_)=> HomeScreen(
-                  )));
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (_) => const MainScreen()),
+                  );
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFD9E9FF), // Example color
+                  backgroundColor: const Color(0xFFD9E9FF),
                   foregroundColor: Colors.blue,
                   minimumSize: const Size(double.infinity, 56),
                   shape: RoundedRectangleBorder(
