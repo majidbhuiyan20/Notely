@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
+import '../model/category_model.dart';
 import '../../widgets/category_card.dart';
 
 class CategoryScreen extends StatefulWidget {
@@ -10,28 +11,7 @@ class CategoryScreen extends StatefulWidget {
 }
 
 class _CategoryScreenState extends State<CategoryScreen> {
-  final List<Map<String, dynamic>> categories = [
-    {'title': 'All Notes', 'icon': Icons.note_alt_outlined, 'color': AppColors.royalBlue, 'count': 45},
-    {'title': 'Personal', 'icon': Icons.person_outline, 'color': AppColors.green, 'count': 12},
-    {'title': 'Work', 'icon': Icons.work_outline, 'color': AppColors.orange, 'count': 8},
-    {'title': 'Health', 'icon': Icons.favorite_border, 'color': AppColors.red, 'count': 5},
-    {'title': 'Finance', 'icon': Icons.account_balance_wallet_outlined, 'color': AppColors.teal, 'count': 3},
-    {'title': 'Travel', 'icon': Icons.flight_takeoff, 'color': AppColors.cyan, 'count': 7},
-    {'title': 'Shopping', 'icon': Icons.shopping_cart_outlined, 'color': AppColors.pink, 'count': 10},
-    {'title': 'Food', 'icon': Icons.restaurant, 'color': AppColors.coral, 'count': 4},
-    {'title': 'Ideas', 'icon': Icons.lightbulb_outline, 'color': AppColors.purple, 'count': 15},
-    {'title': 'Music', 'icon': Icons.music_note, 'color': AppColors.indigo, 'count': 6},
-    {'title': 'Sports', 'icon': Icons.sports_basketball, 'color': AppColors.crimson, 'count': 2},
-    {'title': 'Education', 'icon': Icons.school_outlined, 'color': AppColors.violet, 'count': 9},
-    {'title': 'Photography', 'icon': Icons.camera_alt_outlined, 'color': AppColors.turquoise, 'count': 11},
-    {'title': 'Coding', 'icon': Icons.code, 'color': AppColors.blue, 'count': 20},
-    {'title': 'Art', 'icon': Icons.palette_outlined, 'color': AppColors.magenta, 'count': 5},
-    {'title': 'Gardening', 'icon': Icons.local_florist_outlined, 'color': AppColors.lime, 'count': 3},
-    {'title': 'Gaming', 'icon': Icons.sports_esports_outlined, 'color': AppColors.brown, 'count': 8},
-    {'title': 'Movies', 'icon': Icons.movie_filter_outlined, 'color': AppColors.gold, 'count': 12},
-    {'title': 'Books', 'icon': Icons.menu_book_outlined, 'color': AppColors.orange, 'count': 14},
-    {'title': 'Weather', 'icon': Icons.wb_sunny_outlined, 'color': AppColors.mint, 'count': 1},
-  ];
+  final List<CategoryModel> categories = CategoryModel.all;
 
   @override
   Widget build(BuildContext context) {
@@ -118,10 +98,10 @@ class _CategoryScreenState extends State<CategoryScreen> {
                 (context, index) {
                   final category = categories[index];
                   return CategoryCard(
-                    title: category['title'],
-                    icon: category['icon'],
-                    color: category['color'],
-                    count: category['count'],
+                    title: category.title,
+                    icon: category.icon,
+                    color: category.color,
+                    count: category.count,
                     onTap: () {
                       // Navigate to category details
                     },
