@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/route/app_route.dart';
 import '../model/category_model.dart';
 import '../../widgets/category_card.dart';
 
@@ -16,7 +17,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -103,7 +104,11 @@ class _CategoryScreenState extends State<CategoryScreen> {
                     color: category.color,
                     count: category.count,
                     onTap: () {
-                      // Navigate to category details
+                      Navigator.pushNamed(
+                        context,
+                        Routes.categoryDetailsRoute,
+                        arguments: category.title,
+                      );
                     },
                   );
                 },

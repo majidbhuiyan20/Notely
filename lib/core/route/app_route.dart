@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:notely/features/category/view/category_details_screen.dart';
 import 'package:notely/features/category/view/category_screen.dart';
+import 'package:notely/features/task/view/task_screen.dart';
 import '../../features/main/view/main_screen.dart';
 import '../../features/onboarding/view/onboarding_screen.dart';
 import '../../features/splash/view/splash_screen.dart';
@@ -11,6 +13,8 @@ class Routes {
   static const String mainRoute = "/main";
   static const String loginRoute = "/loginScreen";
   static const String categoryRoute = "/category";
+  static const String categoryDetailsRoute = "/categoryDetails";
+  static const String taskRoute = "/task";
 }
 
 class RouteGenerator {
@@ -24,6 +28,13 @@ class RouteGenerator {
         return MaterialPageRoute(builder: (_) => const MainScreen());
       case Routes.categoryRoute:
         return MaterialPageRoute(builder: (_) => const CategoryScreen());
+      case Routes.categoryDetailsRoute:
+        final categoryName = routeSettings.arguments as String;
+        return MaterialPageRoute(
+          builder: (_) => CategoryDetailsScreen(categoryName: categoryName),
+        );
+      case Routes.taskRoute:
+        return MaterialPageRoute(builder: (_) => const TaskScreen());
       default:
         return unDefineRoute();
     }
