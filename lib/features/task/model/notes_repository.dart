@@ -58,11 +58,88 @@ class NotesRepository {
 
   // ---------- mutations ----------
 
+  void addNote(NoteData note) {
+    _notes.add(note);
+    _notify();
+  }
+
   void replaceNote(NoteData updated) {
     final i = _notes.indexWhere((n) => n.id == updated.id);
     if (i == -1) return;
     _notes[i] = updated;
     _notify();
+  }
+
+  /// Maps a category name to its color/icon (falls back to a neutral palette).
+  ({Color color, IconData icon}) categoryMeta(String name) {
+    switch (name) {
+      case 'Personal':
+        return (color: AppColors.green, icon: Icons.person_outline);
+      case 'Work':
+        return (color: AppColors.orange, icon: Icons.work_outline);
+      case 'Health':
+        return (color: AppColors.red, icon: Icons.favorite_border);
+      case 'Finance':
+        return (
+          color: AppColors.teal,
+          icon: Icons.account_balance_wallet_outlined,
+        );
+      case 'Travel':
+        return (color: AppColors.cyan, icon: Icons.flight_takeoff);
+      case 'Shopping':
+        return (
+          color: AppColors.pink,
+          icon: Icons.shopping_cart_outlined,
+        );
+      case 'Food':
+        return (color: AppColors.coral, icon: Icons.restaurant);
+      case 'Ideas':
+        return (color: AppColors.purple, icon: Icons.lightbulb_outline);
+      case 'Music':
+        return (color: AppColors.indigo, icon: Icons.music_note);
+      case 'Sports':
+        return (
+          color: AppColors.crimson,
+          icon: Icons.sports_basketball,
+        );
+      case 'Education':
+        return (color: AppColors.violet, icon: Icons.school_outlined);
+      case 'Photography':
+        return (
+          color: AppColors.turquoise,
+          icon: Icons.camera_alt_outlined,
+        );
+      case 'Coding':
+        return (color: AppColors.blue, icon: Icons.code);
+      case 'Art':
+        return (color: AppColors.magenta, icon: Icons.palette_outlined);
+      case 'Gardening':
+        return (
+          color: AppColors.lime,
+          icon: Icons.local_florist_outlined,
+        );
+      case 'Gaming':
+        return (
+          color: AppColors.brown,
+          icon: Icons.sports_esports_outlined,
+        );
+      case 'Movies':
+        return (
+          color: AppColors.gold,
+          icon: Icons.movie_filter_outlined,
+        );
+      case 'Books':
+        return (color: AppColors.orange, icon: Icons.menu_book_outlined);
+      case 'Weather':
+        return (color: AppColors.mint, icon: Icons.wb_sunny_outlined);
+      case 'All Notes':
+        return (color: AppColors.royalBlue, icon: Icons.note_alt_outlined);
+      default:
+        return (
+          color: AppColors.grey,
+          icon: Icons.more_horiz_outlined,
+        );
+    }
   }
 
   void toggleStatus(String id) {

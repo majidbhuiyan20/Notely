@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/route/app_route.dart';
 import '../../home/view/home_screen.dart';
 import '../../profile/view/profile_screen.dart';
 
@@ -70,6 +71,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
           child: FloatingActionButton(
             onPressed: () {
               HapticFeedback.mediumImpact();
+              Navigator.pushNamed(context, Routes.createTaskRoute);
             },
             backgroundColor: AppColors.royalBlue,
             elevation: 8,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:notely/features/category/view/category_details_screen.dart';
 import 'package:notely/features/category/view/category_screen.dart';
+import 'package:notely/features/task/view/create_task_screen.dart';
 import 'package:notely/features/task/view/edit_task_screen.dart';
 import 'package:notely/features/task/view/task_screen.dart';
 import '../../features/main/view/main_screen.dart';
@@ -17,6 +18,7 @@ class Routes {
   static const String categoryDetailsRoute = "/categoryDetails";
   static const String taskRoute = "/task";
   static const String editTaskRoute = "/editTask";
+  static const String createTaskRoute = "/createTask";
 }
 
 class RouteGenerator {
@@ -44,6 +46,12 @@ class RouteGenerator {
         final noteId = routeSettings.arguments as String?;
         return MaterialPageRoute(
           builder: (_) => EditTaskScreen(noteId: noteId),
+        );
+      case Routes.createTaskRoute:
+        final initialCategory = routeSettings.arguments as String?;
+        return MaterialPageRoute(
+          builder: (_) =>
+              CreateTaskScreen(initialCategory: initialCategory),
         );
       default:
         return unDefineRoute();

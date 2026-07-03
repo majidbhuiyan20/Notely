@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/route/app_route.dart';
 import '../../task/model/note_data.dart';
 import '../../task/model/notes_repository.dart';
 import '../../widgets/back_button.dart';
@@ -41,7 +42,7 @@ class _CategoryDetailsScreenState extends State<CategoryDetailsScreen> {
   /// Returns the metadata for the current category: total / completed /
   /// progress / accent color.
   _CategoryStats _statsFor() {
-    final meta = _categoryMeta(widget.categoryName);
+    final meta = _repo.categoryMeta(widget.categoryName);
     final total = _repo.totalFor(widget.categoryName);
     final completed = _repo.completedFor(widget.categoryName);
     return _CategoryStats(
@@ -51,97 +52,6 @@ class _CategoryDetailsScreenState extends State<CategoryDetailsScreen> {
       completed: completed,
       progress: _repo.progressFor(widget.categoryName),
     );
-  }
-
-  /// Maps the category name to a color/icon. Falls back to a neutral palette
-  /// if the category is not recognized.
-  ({Color color, IconData icon}) _categoryMeta(String name) {
-    switch (name) {
-      case 'Personal':
-        return (color: const Color(0xFF34C759), icon: Icons.person_outline);
-      case 'Work':
-        return (color: const Color(0xFFFF9500), icon: Icons.work_outline);
-      case 'Health':
-        return (color: const Color(0xFFFF3B30), icon: Icons.favorite_border);
-      case 'Finance':
-        return (
-          color: const Color(0xFF30B0C7),
-          icon: Icons.account_balance_wallet_outlined
-        );
-      case 'Travel':
-        return (
-          color: const Color(0xFF00C7BE),
-          icon: Icons.flight_takeoff
-        );
-      case 'Shopping':
-        return (
-          color: const Color(0xFFFF2D55),
-          icon: Icons.shopping_cart_outlined
-        );
-      case 'Food':
-        return (color: const Color(0xFFFF7F50), icon: Icons.restaurant);
-      case 'Ideas':
-        return (
-          color: const Color(0xFFAF52DE),
-          icon: Icons.lightbulb_outline
-        );
-      case 'Music':
-        return (color: const Color(0xFF5856D6), icon: Icons.music_note);
-      case 'Sports':
-        return (
-          color: const Color(0xFFFF3B30),
-          icon: Icons.sports_basketball
-        );
-      case 'Education':
-        return (
-          color: const Color(0xFFAF52DE),
-          icon: Icons.school_outlined
-        );
-      case 'Photography':
-        return (
-          color: const Color(0xFF00C7BE),
-          icon: Icons.camera_alt_outlined
-        );
-      case 'Coding':
-        return (color: const Color(0xFF007AFF), icon: Icons.code);
-      case 'Art':
-        return (
-          color: const Color(0xFFFF2D55),
-          icon: Icons.palette_outlined
-        );
-      case 'Gardening':
-        return (
-          color: const Color(0xFF34C759),
-          icon: Icons.local_florist_outlined
-        );
-      case 'Gaming':
-        return (
-          color: const Color(0xFF8E5524),
-          icon: Icons.sports_esports_outlined
-        );
-      case 'Movies':
-        return (
-          color: const Color(0xFFFFCC00),
-          icon: Icons.movie_filter_outlined
-        );
-      case 'Books':
-        return (color: const Color(0xFFFF9500), icon: Icons.menu_book_outlined);
-      case 'Weather':
-        return (
-          color: const Color(0xFFFFCC00),
-          icon: Icons.wb_sunny_outlined
-        );
-      case 'All Notes':
-        return (
-          color: const Color(0xFF4169E1),
-          icon: Icons.note_alt_outlined
-        );
-      default:
-        return (
-          color: const Color(0xFF8E8E93),
-          icon: Icons.more_horiz_rounded
-        );
-    }
   }
 
   List<NoteData> _filteredAndSorted() {
@@ -178,6 +88,11 @@ class _CategoryDetailsScreenState extends State<CategoryDetailsScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF2F2F7),
       appBar: const NotelyAppBar(title: 'Category Details'),
+      floatingActionButton: _CreateTaskFab(
+        color: stats.color,
+        categoryName: widget.categoryName,
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       body: ListView(
         physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
@@ -330,6 +245,51 @@ class _SortRow extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Rounded floating action button used to create a new note from the
+/// category details screen. Tapping it opens the Create Task screen with
+/// the current category preselected so the new note lands in the right
+/// place. "All Notes" is a virtual aggregate category and falls back to
+/// "Personal" when creating.
+class _CreateTaskFab extends StatelessWidget {
+  const _CreateTaskFab({
+    required this.color,
+    required this.categoryName,
+  });
+  final Color color;
+  final String categoryName;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.35),
+            blurRadius: 15,
+            spreadRadius: 4,
+          ),
+        ],
+      ),
+      child: FloatingActionButton(
+        backgroundColor: color,
+        elevation: 6,
+        shape: const CircleBorder(),
+        onPressed: () {
+          final initial = categoryName == 'All Notes' ? null : categoryName;
+          Navigator.pushNamed(
+            context,
+            Routes.createTaskRoute,
+            arguments: initial,
+          );
+        },
+        tooltip: 'New Note',
+        child: const Icon(Icons.add_rounded, color: Colors.white, size: 32),
       ),
     );
   }
