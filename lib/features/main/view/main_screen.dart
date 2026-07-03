@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../home/view/home_screen.dart';
+import '../../profile/view/profile_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -31,16 +32,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
 
   final List<Widget> _screens = [
     const HomeScreen(),
-    const Center(
-      child: Text(
-        'Profile Screen',
-        style: TextStyle(
-          fontSize: 24,
-          fontWeight: FontWeight.bold,
-          color: AppColors.royalBlue,
-        ),
-      ),
-    ),
+    const ProfileScreen(),
   ];
 
   void _onItemTapped(int index) {

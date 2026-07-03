@@ -36,5 +36,6 @@ class CategoryModel {
     CategoryModel(title: 'Movies', icon: Icons.movie_filter_outlined, color: AppColors.gold, count: 12),
     CategoryModel(title: 'Books', icon: Icons.menu_book_outlined, color: AppColors.orange, count: 14),
     CategoryModel(title: 'Weather', icon: Icons.wb_sunny_outlined, color: AppColors.mint, count: 1),
+    CategoryModel(title: 'Others', icon: Icons.more_horiz_outlined, color: AppColors.grey, count: 2),
   ];
 }

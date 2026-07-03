@@ -1,165 +1,181 @@
 import 'package:flutter/material.dart';
-import '../widgets/check_list_item.dart';
-import '../widgets/task_details_row.dart';
+import '../../../core/constants/app_colors.dart';
+import '../../../core/route/app_route.dart';
+import '../model/note_data.dart';
+import '../model/notes_repository.dart';
+import '../widgets/task_checklist_section.dart';
+import '../widgets/task_description_section.dart';
+import '../widgets/task_hero_card.dart';
+import '../widgets/task_meta_section.dart';
+import '../../widgets/back_button.dart';
+
 class TaskScreen extends StatefulWidget {
-  const TaskScreen({super.key});
+  const TaskScreen({super.key, this.noteId});
+  final String? noteId;
 
   @override
   State<TaskScreen> createState() => _TaskScreenState();
 }
 
 class _TaskScreenState extends State<TaskScreen> {
+  late final NotesRepository _repo;
+  NoteData? _note;
+
+  @override
+  void initState() {
+    super.initState();
+    _repo = NotesRepository.instance;
+    _note = _resolveNote();
+    _repo.addListener(_onRepoChanged);
+  }
+
+  @override
+  void dispose() {
+    _repo.removeListener(_onRepoChanged);
+    super.dispose();
+  }
+
+  NoteData? _resolveNote() {
+    if (widget.noteId == null) return null;
+    return _repo.noteById(widget.noteId!);
+  }
+
+  void _onRepoChanged() {
+    setState(() {
+      _note = _resolveNote();
+    });
+  }
+
+  void _toggleChecklist(int index) {
+    final n = _note;
+    if (n == null) return;
+    setState(() {
+      n.checklist[index].isChecked = !n.checklist[index].isChecked;
+    });
+  }
+
+  void _markAllComplete() {
+    final n = _note;
+    if (n == null) return;
+    setState(() {
+      for (final c in n.checklist) {
+        c.isChecked = true;
+      }
+      n.status = NoteStatus.completed;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Marked all checklist items done'),
+        behavior: SnackBarBehavior.floating,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        backgroundColor: const Color(0xFF34C759),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  void _openEdit() {
+    if (_note == null) return;
+    Navigator.pushNamed(
+      context,
+      Routes.editTaskRoute,
+      arguments: _note!.id,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        centerTitle: false,
-        leading: Padding(
-          padding: const EdgeInsets.only(left: 12.0),
-          child: Center(
-            child: Container(
-              height: 40,
-              width: 40,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 10,
-                  )
-                ],
-              ),
-              child: IconButton(
-                icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black, size: 16),
-                onPressed: () => Navigator.pop(context),
-              ),
+    final note = _note;
+
+    if (note == null) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFF2F2F7),
+        appBar: const NotelyAppBar(title: 'Note Details'),
+        body: const Center(
+          child: Text(
+            'Note not found',
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.black54,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF2F2F7),
+      appBar: NotelyAppBar(
+        title: 'Note Details',
         actions: [
-          Icon(Icons.edit),
-          SizedBox(width: 12),
-          Icon(Icons.more_vert_outlined),
-          SizedBox(width: 16,),
+          IconButton(
+            onPressed: _openEdit,
+            icon: const Icon(Icons.edit_outlined,
+                color: Color(0xFF1E1E1E), size: 22),
+          ),
+          const SizedBox(width: 4),
+          IconButton(
+            onPressed: () {},
+            icon: const Icon(Icons.more_vert_rounded,
+                color: Color(0xFF1E1E1E), size: 22),
+          ),
+          const SizedBox(width: 8),
         ],
       ),
-      body: Column(
-        spacing: 12,
-        children: [
-          SizedBox(height: 12,),
-          Align(
-            alignment: Alignment.center,
-            child: Container(
-              padding: EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.1),
-                borderRadius: BorderRadius.all(Radius.circular(12)),
-              ),
-              child: Icon(Icons.person_outline, color: Colors.orange, size: 48),
-            ),
-          ),
-          Text("Product RoadMap", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(30),
-                  border: Border.all(color: Colors.orange.withOpacity(0.2), width: 1),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.person_outline, color: Colors.orange, size: 20),
-                    SizedBox(width: 6,),
-                    Text("Personal", style: TextStyle(fontSize: 14, color: Colors.orange, fontWeight: FontWeight.w500), ),
-                  ],
-                ),
-              ),
-              SizedBox(width: 12,),
-              Container(
-                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(30),
-                  border: Border.all(color: Colors.red.withOpacity(0.2), width: 1),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      height: 10,
-                      width: 10,
-                      decoration: BoxDecoration(
-                        color: Colors.red,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    SizedBox(width: 6,),
-                    Text("High", style: TextStyle(fontSize: 14, color: Colors.red, fontWeight: FontWeight.w500), ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 0),
-            child: Container(
-              padding: EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.all(Radius.circular(12)),
-                border: Border.all(color: Colors.black.withOpacity(0.1), width: 1),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    spreadRadius: 1,
-                    blurRadius: 2,
-                    offset: Offset(0, 1),
-                  ),
-                ],
-
-              ),
-              child: Column(
-                children: [
-                  TaskDetailRow(title: 'Due Date', icon: Icons.calendar_month, value: 'Today, 10:00 AM',),
-                  SizedBox(height: 12),
-                  TaskDetailRow(title: 'Created', icon: Icons.timer, value: 'May 22, 2025 - 9.20 AM',),
-                  SizedBox(height: 12),
-                  TaskDetailRow(title: 'Priority', icon: Icons.priority_high, value: 'High',),
-                  SizedBox(height: 12),
-                  TaskDetailRow(title: 'Status', icon: Icons.check_circle_outline, value: 'Completed',),
-                  SizedBox(height: 12),
-                  TaskDetailRow(title: 'Assignee', icon: Icons.person_outline, value: 'John Doe',),
-                  SizedBox(height: 12),
-                  TaskDetailRow(title: 'Reminder', icon: Icons.notifications_active, value: "10 Min Before",),
-
-                  SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Text("Checklist", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),),
-                      Spacer(),
-                      Text("2", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Color(0xFF1B5E20)),),
-                      Text("/4", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),)
-                    ],
-                  ),
-                  SizedBox(height: 12),
-                  ChecklistItem(title: "Define product vision", isChecked: true),
-                  ChecklistItem(title: "Competitor analysis", isChecked: true),
-                  ChecklistItem(title: "Feature prioritization", isChecked: false),
-                  ChecklistItem(title: "Release schedule", isChecked: false),
-                ],
-              ),
-            ),
-          )
-        ],
+      body: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TaskHeroCard(note: note, onEdit: _openEdit),
+            const SizedBox(height: 20),
+            TaskMetaSection(note: note),
+            const SizedBox(height: 20),
+            TaskDescriptionSection(note: note),
+            const SizedBox(height: 20),
+            TaskChecklistSection(note: note, onToggle: _toggleChecklist),
+            const SizedBox(height: 28),
+            _MarkAllCompleteButton(onPressed: _markAllComplete),
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
     );
   }
 }
 
+class _MarkAllCompleteButton extends StatelessWidget {
+  const _MarkAllCompleteButton({required this.onPressed});
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: 56,
+      child: ElevatedButton.icon(
+        onPressed: onPressed,
+        icon: const Icon(Icons.check_rounded, size: 22),
+        label: const Text(
+          'MARK ALL COMPLETE',
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.6,
+          ),
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.royalBlue,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+      ),
+    );
+  }
+}

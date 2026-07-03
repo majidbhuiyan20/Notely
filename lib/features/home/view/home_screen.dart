@@ -76,7 +76,13 @@ class _HomeScreenState extends State<HomeScreen> {
                               title: category.title,
                               count: category.count,
                               color: category.color,
-                              onTap: () {},
+                              onTap: () {
+                                Navigator.pushNamed(
+                                  context,
+                                  Routes.categoryDetailsRoute,
+                                  arguments: category.title,
+                                );
+                              },
                             ),
                           ),
                         );
