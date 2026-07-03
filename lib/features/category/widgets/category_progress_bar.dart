@@ -55,45 +55,47 @@ class CategoryProgressBar extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
-            child: Stack(
-              children: [
-                Container(
-                  height: 8,
-                  color: const Color(0xFFE5E5EA),
-                ),
-                AnimatedFractionallySizedBox(
-                  duration: const Duration(milliseconds: 700),
-                  widthFactor: progress.clamp(0.0, 1.0),
-                  heightFactor: 1,
-                  alignment: Alignment.centerLeft,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [color, color.withOpacity(0.7)],
-                      ),
-                    ),
+            child: SizedBox(
+              height: 12, // Fixed height to prevent infinite height constraints
+              child: Stack(
+                children: [
+                  Container(
+                    color: const Color(0xFFE5E5EA),
                   ),
-                ),
-                Positioned.fill(
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: Padding(
-                      padding: const EdgeInsets.only(right: 0),
-                      child: Text(
-                        '$percent%',
-                        style: TextStyle(
-                          fontSize: 9,
-                          color: color,
-                          fontWeight: FontWeight.w800,
+                  AnimatedFractionallySizedBox(
+                    duration: const Duration(milliseconds: 700),
+                    widthFactor: progress.clamp(0.0, 1.0),
+                    heightFactor: 1,
+                    alignment: Alignment.centerLeft,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [color, color.withOpacity(0.7)],
                         ),
                       ),
                     ),
                   ),
-                ),
-              ],
+                  Positioned.fill(
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Text(
+                          '$percent%',
+                          style: const TextStyle(
+                            fontSize: 8,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
