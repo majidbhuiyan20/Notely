@@ -68,6 +68,7 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
       status: NoteStatus.pending,
       priority: snap.priority,
       dueDate: _dueDateDisplay(snap.dueDate),
+      dueTime: snap.dueTime,
       dueDateIso: snap.dueDate == null ? null : _iso(snap.dueDate!),
       checklist: snap.checklist,
     );

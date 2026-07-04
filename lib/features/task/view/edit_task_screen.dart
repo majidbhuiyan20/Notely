@@ -53,6 +53,7 @@ class _EditTaskScreenState extends ConsumerState<EditTaskScreen> {
         priority: note.priority,
         dueDate:
             note.dueDateIso == null ? null : _parseIso(note.dueDateIso!),
+        dueTime: note.dueTime,
         checklist: note.checklist,
       );
       _form!.onChanged = () {
@@ -84,6 +85,7 @@ class _EditTaskScreenState extends ConsumerState<EditTaskScreen> {
     updated.priority = snap.priority;
     updated.dueDateIso = snap.dueDate == null ? null : _iso(snap.dueDate!);
     updated.dueDate = snap.dueDate == null ? '' : _dueDateDisplay(snap.dueDate!);
+    updated.dueTime = snap.dueDate == null ? '' : snap.dueTime;
     updated.checklist
       ..clear()
       ..addAll(snap.checklist);

@@ -7,9 +7,11 @@ import '../models/task_row.dart';
 import '../../domain/repositories/task_repository.dart';
 
 /// Local-first implementation of [TaskRepository]. Every write hits sqflite
-/// immediately (so the UI is responsive and offline-safe) and then pushes
-/// to Firestore in the background. Reads return whatever is in sqflite;
-/// callers can call [refreshFromRemote] to pull down cloud changes.
+/// immediately (so the UI is responsive and offline-safe) and is flagged
+/// `is_dirty = 1` so the [SyncManager] can drain it to Firestore later.
+/// Reads return whatever is in sqflite; callers can call
+/// [refreshFromRemote] to pull down cloud changes (which clears all dirty
+/// flags because the cloud copy is now authoritative).
 class TaskRepositoryImpl implements TaskRepository {
   TaskRepositoryImpl({
     required TaskLocalDataSource local,
@@ -32,7 +34,8 @@ class TaskRepositoryImpl implements TaskRepository {
     if (remote.isEmpty) return getTasks(uid);
 
     // Replace the local cache with the cloud copy. Newest-write-wins
-    // because Firestore server-timestamps the write.
+    // because Firestore server-timestamps the write. The replacement
+    // rows are NOT dirty — they came straight from the cloud.
     await _local.deleteAllForUser(uid);
     for (final row in remote) {
       await _local.upsert(row);
@@ -42,17 +45,42 @@ class TaskRepositoryImpl implements TaskRepository {
 
   @override
   Future<NoteData> upsertNote(String uid, NoteData note) async {
-    final row = TaskRow.fromNote(uid: uid, note: note);
+    final row = TaskRow.fromNote(uid: uid, note: note, isDirty: true);
     await _local.upsert(row);
-    // Fire-and-forget cloud sync. The local copy is authoritative.
-    unawaited(_remote.upsert(uid, note));
+
+    // Best-effort immediate push. If this fails the row stays dirty
+    // and SyncManager will retry on reconnect / app resume.
+    unawaited(_pushAndMarkClean(uid, note));
+
     return note;
+  }
+
+  Future<void> _pushAndMarkClean(String uid, NoteData note) async {
+    try {
+      await _remote.upsert(uid, note);
+      await _local.markClean(uid, note.id);
+    } catch (_) {
+      // Remote datasource already logs the failure; row stays dirty
+      // and will be retried by SyncManager.drain later.
+    }
   }
 
   @override
   Future<void> deleteNote(String uid, String id) async {
-    await _local.delete(uid, id);
-    unawaited(_remote.delete(uid, id));
+    // Remove locally + leave a tombstone so the SyncManager can
+    // replay the remote delete when connectivity returns.
+    await _local.markDeleted(uid, id);
+    unawaited(_pushDeleteAndRemoveTombstone(uid, id));
+  }
+
+  Future<void> _pushDeleteAndRemoveTombstone(String uid, String id) async {
+    try {
+      await _remote.delete(uid, id);
+      await _local.removeTombstone(uid, id);
+    } catch (_) {
+      // Remote datasource logs the failure; tombstone stays and the
+      // SyncManager will retry later.
+    }
   }
 
   @override

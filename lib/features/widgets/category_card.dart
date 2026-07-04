@@ -40,13 +40,12 @@ class CategoryCard extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(20),
           child: Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.all(12.0), // Reduced from 16.0
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(10), // Reduced from 12
                   decoration: BoxDecoration(
                     color: color.withOpacity(0.12),
                     shape: BoxShape.circle,
@@ -54,11 +53,13 @@ class CategoryCard extends StatelessWidget {
                   child: Icon(
                     icon,
                     color: color,
-                    size: 26,
+                    size: 24, // Reduced from 26
                   ),
                 ),
+                const Spacer(), // Pushes the text column to the bottom safely
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       title,
@@ -66,17 +67,17 @@ class CategoryCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: Color(0xFF1E1E1E),
-                        fontSize: 16,
+                        fontSize: 15, // Reduced from 16
                         fontWeight: FontWeight.w700,
                         letterSpacing: -0.5,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 2), // Reduced from 4
                     Text(
                       '$count Notes',
                       style: TextStyle(
                         color: Colors.grey.shade500,
-                        fontSize: 13,
+                        fontSize: 12, // Reduced from 13
                         fontWeight: FontWeight.w500,
                       ),
                     ),

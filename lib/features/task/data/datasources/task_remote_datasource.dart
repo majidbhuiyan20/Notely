@@ -75,6 +75,7 @@ class TaskRemoteDataSource {
         'priorityIndex': n.priority.index,
         'dueDate': n.dueDate,
         'dueDateIso': n.dueDateIso,
+        'dueTime': n.dueTime,
         'assignee': n.assignee,
         'reminder': n.reminder,
         'checklist': n.checklist.map((c) => c.toJson()).toList(),
@@ -99,10 +100,12 @@ class TaskRemoteDataSource {
       priorityIndex: (data['priorityIndex'] as int?) ?? 1,
       dueDate: (data['dueDate'] as String?) ?? '',
       dueDateIso: data['dueDateIso'] as String?,
+      dueTime: (data['dueTime'] as String?) ?? '',
       assignee: (data['assignee'] as String?) ?? '',
       reminder: (data['reminder'] as String?) ?? '',
       checklistJson: jsonEncode(checklist),
       isPinned: (data['isPinned'] as bool?) ?? false,
+      isDirty: false,
       updatedAt: (data['updatedAt'] as Timestamp?)?.millisecondsSinceEpoch ??
           DateTime.now().millisecondsSinceEpoch,
     );

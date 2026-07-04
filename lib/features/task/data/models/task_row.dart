@@ -21,10 +21,12 @@ class TaskRow {
     required this.priorityIndex,
     required this.dueDate,
     required this.dueDateIso,
+    required this.dueTime,
     required this.assignee,
     required this.reminder,
     required this.checklistJson,
     required this.isPinned,
+    required this.isDirty,
     required this.updatedAt,
   });
 
@@ -39,10 +41,15 @@ class TaskRow {
   final int priorityIndex;
   final String dueDate;
   final String? dueDateIso;
+  final String dueTime;
   final String assignee;
   final String reminder;
   final String checklistJson;
   final bool isPinned;
+
+  /// `true` when this row has a local change that hasn't been pushed to
+  /// Firestore yet. The sync manager drains dirty rows on reconnect.
+  final bool isDirty;
   final int updatedAt;
 
   Map<String, Object?> toDb() => {
@@ -57,10 +64,12 @@ class TaskRow {
         'priority_index': priorityIndex,
         'due_date': dueDate,
         'due_date_iso': dueDateIso,
+        'due_time': dueTime,
         'assignee': assignee,
         'reminder': reminder,
         'checklist_json': checklistJson,
         'is_pinned': isPinned ? 1 : 0,
+        'is_dirty': isDirty ? 1 : 0,
         'updated_at': updatedAt,
       };
 
@@ -78,10 +87,12 @@ class TaskRow {
       priorityIndex: (row['priority_index'] as int?) ?? 1,
       dueDate: (row['due_date'] as String?) ?? '',
       dueDateIso: row['due_date_iso'] as String?,
+      dueTime: (row['due_time'] as String?) ?? '',
       assignee: (row['assignee'] as String?) ?? '',
       reminder: (row['reminder'] as String?) ?? '',
       checklistJson: (row['checklist_json'] as String?) ?? '[]',
       isPinned: ((row['is_pinned'] as int?) ?? 0) != 0,
+      isDirty: ((row['is_dirty'] as int?) ?? 0) != 0,
       updatedAt: (row['updated_at'] as int?) ?? 0,
     );
   }
@@ -100,6 +111,7 @@ class TaskRow {
           priorityIndex.clamp(0, NotePriority.values.length - 1)],
       dueDate: dueDate,
       dueDateIso: dueDateIso,
+      dueTime: dueTime,
       assignee: assignee,
       reminder: reminder,
       isPinned: isPinned,
@@ -111,6 +123,7 @@ class TaskRow {
     required String uid,
     required NoteData note,
     int? updatedAt,
+    bool isDirty = false,
   }) {
     return TaskRow(
       id: note.id,
@@ -124,12 +137,14 @@ class TaskRow {
       priorityIndex: note.priority.index,
       dueDate: note.dueDate,
       dueDateIso: note.dueDateIso,
+      dueTime: note.dueTime,
       assignee: note.assignee,
       reminder: note.reminder,
       checklistJson: jsonEncode(
         note.checklist.map((c) => c.toJson()).toList(),
       ),
       isPinned: note.isPinned,
+      isDirty: isDirty,
       updatedAt: updatedAt ?? DateTime.now().millisecondsSinceEpoch,
     );
   }

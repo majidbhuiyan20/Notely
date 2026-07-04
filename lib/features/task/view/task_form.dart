@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/utils/date_formatter.dart';
 import '../model/note_data.dart';
 import '../widgets/category_selector.dart';
 import '../widgets/checklist_editor.dart';
@@ -17,12 +18,14 @@ class TaskFormController {
     String category = 'Personal',
     NotePriority priority = NotePriority.medium,
     DateTime? dueDate,
+    String? dueTime,
     List<ChecklistItemModel>? checklist,
   })  : _title = TextEditingController(text: title ?? ''),
         _description = TextEditingController(text: description ?? ''),
         _category = category,
         _priority = priority,
         _dueDate = dueDate,
+        _dueTime = dueTime ?? '',
         _checklist = List<ChecklistItemModel>.from(checklist ?? const []),
         _itemControllers = {},
         _itemFocusNodes = {} {
@@ -37,6 +40,7 @@ class TaskFormController {
   String _category;
   NotePriority _priority;
   DateTime? _dueDate;
+  String _dueTime;
   final List<ChecklistItemModel> _checklist;
   final Map<String, TextEditingController> _itemControllers;
   final Map<String, FocusNode> _itemFocusNodes;
@@ -47,6 +51,7 @@ class TaskFormController {
   String get category => _category;
   NotePriority get priority => _priority;
   DateTime? get dueDate => _dueDate;
+  String get dueTime => _dueTime;
   List<ChecklistItemModel> get checklist => _checklist;
   Map<String, TextEditingController> get itemControllers => _itemControllers;
   Map<String, FocusNode> get itemFocusNodes => _itemFocusNodes;
@@ -75,6 +80,12 @@ class TaskFormController {
 
   void setDueDate(DateTime? value) {
     _dueDate = value;
+    if (value == null) _dueTime = '';
+    onChanged?.call();
+  }
+
+  void setDueTime(String value) {
+    _dueTime = value;
     onChanged?.call();
   }
 
@@ -124,6 +135,7 @@ class TaskFormController {
       category: _category,
       priority: _priority,
       dueDate: _dueDate,
+      dueTime: _dueTime,
       checklist: List<ChecklistItemModel>.from(_checklist),
     );
   }
@@ -147,6 +159,7 @@ class TaskFormResult {
     required this.category,
     required this.priority,
     required this.dueDate,
+    required this.dueTime,
     required this.checklist,
   });
   final String title;
@@ -154,6 +167,7 @@ class TaskFormResult {
   final String category;
   final NotePriority priority;
   final DateTime? dueDate;
+  final String dueTime;
   final List<ChecklistItemModel> checklist;
 }
 
@@ -224,8 +238,10 @@ class TaskFormBody extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           _DueDateRow(
-            value: controller.dueDate,
-            onChanged: controller.setDueDate,
+            date: controller.dueDate,
+            time: controller.dueTime,
+            onDateChanged: controller.setDueDate,
+            onTimeChanged: controller.setDueTime,
           ),
           const SizedBox(height: 16),
           ChecklistEditor(
@@ -316,72 +332,151 @@ class TaskFormSaveButton extends StatelessWidget {
   }
 }
 
-/// iOS-style tappable row that opens a modal date picker. Writes the
-/// picked DateTime (or null if "Clear") through [onChanged].
+/// iOS-style tappable rows for the date + (optional) time of a note.
+///
+/// After the user picks a date, an "Add a time?" confirm sheet appears.
+/// Saying yes opens `showTimePicker`; saying no keeps the task all-day.
+/// The date is required to set a time — clearing the date also clears
+/// the time.
 class _DueDateRow extends StatelessWidget {
-  const _DueDateRow({required this.value, required this.onChanged});
-  final DateTime? value;
-  final ValueChanged<DateTime?> onChanged;
+  const _DueDateRow({
+    required this.date,
+    required this.time,
+    required this.onDateChanged,
+    required this.onTimeChanged,
+  });
+
+  final DateTime? date;
+  final String time;
+  final ValueChanged<DateTime?> onDateChanged;
+  final ValueChanged<String> onTimeChanged;
 
   @override
   Widget build(BuildContext context) {
-    return EditFieldCard(
-      label: 'DUE DATE',
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              value == null ? 'No due date' : _format(value!),
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: value == null ? Colors.grey.shade500 : const Color(0xFF1E1E1E),
-              ),
-            ),
-          ),
-          if (value != null)
-            GestureDetector(
-              onTap: () => onChanged(null),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6),
+    final hasDate = date != null;
+    return Column(
+      children: [
+        EditFieldCard(
+          label: 'DUE DATE',
+          child: Row(
+            children: [
+              Expanded(
                 child: Text(
-                  'Clear',
+                  hasDate ? _formatDate(date!) : 'No due date',
                   style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.grey.shade500,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: hasDate
+                        ? const Color(0xFF1E1E1E)
+                        : Colors.grey.shade500,
                   ),
                 ),
               ),
-            ),
-          GestureDetector(
-            onTap: () => _pick(context),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: AppColors.royalBlue.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                value == null ? 'Set date' : 'Change',
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.royalBlue,
+              if (hasDate)
+                GestureDetector(
+                  onTap: () => onDateChanged(null),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    child: Text(
+                      'Clear',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.grey.shade500,
+                      ),
+                    ),
+                  ),
+                ),
+              GestureDetector(
+                onTap: () => _pickDate(context),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.royalBlue.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    hasDate ? 'Change' : 'Set date',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.royalBlue,
+                    ),
+                  ),
                 ),
               ),
+            ],
+          ),
+        ),
+        if (hasDate) ...[
+          const SizedBox(height: 10),
+          EditFieldCard(
+            label: 'TIME',
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    time.isEmpty
+                        ? 'No time set (all-day)'
+                        : DateFormatter.formatTime12h(time),
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: time.isEmpty
+                          ? Colors.grey.shade500
+                          : const Color(0xFF1E1E1E),
+                    ),
+                  ),
+                ),
+                if (time.isNotEmpty)
+                  GestureDetector(
+                    onTap: () => onTimeChanged(''),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      child: Text(
+                        'Clear',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.grey.shade500,
+                        ),
+                      ),
+                    ),
+                  ),
+                GestureDetector(
+                  onTap: () => _pickTime(context),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.royalBlue.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      time.isEmpty ? 'Add time' : 'Change',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.royalBlue,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
-      ),
+      ],
     );
   }
 
-  Future<void> _pick(BuildContext context) async {
-    final initial = value ?? DateTime.now();
+  Future<void> _pickDate(BuildContext context) async {
+    final wasEmpty = date == null;
+    final initial = date ?? DateTime.now();
     DateTime selected = DateTime(initial.year, initial.month, initial.day);
 
-    await showModalBottomSheet<void>(
+    final picked = await showModalBottomSheet<DateTime>(
       context: context,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
@@ -420,10 +515,7 @@ class _DueDateRow extends StatelessWidget {
                     width: double.infinity,
                     height: 48,
                     child: ElevatedButton(
-                      onPressed: () {
-                        onChanged(selected);
-                        Navigator.of(ctx).pop();
-                      },
+                      onPressed: () => Navigator.of(ctx).pop(selected),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.royalBlue,
                         foregroundColor: Colors.white,
@@ -448,9 +540,134 @@ class _DueDateRow extends StatelessWidget {
         );
       },
     );
+
+    if (picked == null) return;
+    onDateChanged(picked);
+
+    // Auto-prompt for a time whenever the user picks a brand-new date
+    // and the existing entry had no time yet (or was empty before).
+    if (wasEmpty && time.isEmpty && context.mounted) {
+      await _maybeAskForTime(context);
+    }
   }
 
-  String _format(DateTime d) {
+  Future<void> _maybeAskForTime(BuildContext context) async {
+    final ask = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              const Text(
+                'Add a time?',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF1E1E1E),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Schedules the note on your calendar at a specific hour.',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.grey.shade600,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.of(ctx).pop(false),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF1E1E1E),
+                        side: BorderSide(color: Colors.grey.shade300),
+                        padding:
+                            const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: const Text(
+                        'Skip',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.of(ctx).pop(true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.royalBlue,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding:
+                            const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: const Text(
+                        'Pick time',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (ask != true || !context.mounted) return;
+    await _pickTime(context);
+  }
+
+  Future<void> _pickTime(BuildContext context) async {
+    final initial =
+        DateFormatter.parseTime24h(time) ?? TimeOfDay.now();
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: initial,
+      builder: (ctx, child) {
+        return MediaQuery(
+          data: MediaQuery.of(ctx).copyWith(alwaysUse24HourFormat: true),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
+    );
+    if (picked == null) return;
+    onTimeChanged(DateFormatter.formatTime24h(picked));
+  }
+
+  String _formatDate(DateTime d) {
     const months = [
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',

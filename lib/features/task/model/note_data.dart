@@ -47,6 +47,7 @@ class NoteData {
     this.status = NoteStatus.pending,
     this.priority = NotePriority.medium,
     this.dueDate = '',
+    this.dueTime = '',
     this.assignee = '',
     this.reminder = '',
     this.dueDateIso,
@@ -63,6 +64,12 @@ class NoteData {
   NoteStatus status;
   NotePriority priority;
   String dueDate;
+
+  /// Optional time-of-day in 24-hour `'HH:mm'` form (e.g. `'14:30'`).
+  /// Empty string means no time set — the task is treated as all-day.
+  /// The day-view calendar surfaces a left time column only when this
+  /// is non-empty.
+  String dueTime;
   String assignee;
   String reminder;
 
@@ -93,6 +100,7 @@ class NoteData {
         status: status,
         priority: priority,
         dueDate: dueDate,
+        dueTime: dueTime,
         assignee: assignee,
         reminder: reminder,
         dueDateIso: dueDateIso,
