@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:notely/features/analytics/view/analytics_screen.dart';
 import 'package:notely/features/authentication/presentation/view/login_screen.dart';
 import 'package:notely/features/category/view/category_details_screen.dart';
 import 'package:notely/features/category/view/category_screen.dart';
@@ -20,6 +21,7 @@ class Routes {
   static const String taskRoute = "/task";
   static const String editTaskRoute = "/editTask";
   static const String createTaskRoute = "/createTask";
+  static const String analyticsRoute = "/analytics";
 }
 
 class RouteGenerator {
@@ -56,6 +58,8 @@ class RouteGenerator {
           builder: (_) =>
               CreateTaskScreen(initialCategory: initialCategory),
         );
+      case Routes.analyticsRoute:
+        return MaterialPageRoute(builder: (_) => const AnalyticsScreen());
       default:
         return unDefineRoute();
     }

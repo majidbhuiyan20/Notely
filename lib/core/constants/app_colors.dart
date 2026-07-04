@@ -41,4 +41,17 @@ class AppColors {
   static const Color lime = Color(0xFF00FF00);
   static const Color magenta = Color(0xFFFF00FF);
   static const Color olive = Color(0xFF808000);
+
+  // Chart palette used by the analytics screen. Five brand-coherent
+  // colours so pie / bar charts stay readable.
+  static const List<Color> chartPalette = [
+    royalBlue, // #4169E1
+    orange, // #FFA500
+    green, // #008000
+    purple, // #800080
+    crimson, // #DC143C
+  ];
+
+  /// Opaque + faded version of a chart colour for stacked bars.
+  static Color faded(Color c) => c.withValues(alpha: 0.6);
 }

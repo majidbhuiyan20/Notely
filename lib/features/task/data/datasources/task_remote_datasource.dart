@@ -78,6 +78,7 @@ class TaskRemoteDataSource {
         'assignee': n.assignee,
         'reminder': n.reminder,
         'checklist': n.checklist.map((c) => c.toJson()).toList(),
+        'isPinned': n.isPinned,
         'updatedAt': FieldValue.serverTimestamp(),
       };
 
@@ -101,6 +102,7 @@ class TaskRemoteDataSource {
       assignee: (data['assignee'] as String?) ?? '',
       reminder: (data['reminder'] as String?) ?? '',
       checklistJson: jsonEncode(checklist),
+      isPinned: (data['isPinned'] as bool?) ?? false,
       updatedAt: (data['updatedAt'] as Timestamp?)?.millisecondsSinceEpoch ??
           DateTime.now().millisecondsSinceEpoch,
     );

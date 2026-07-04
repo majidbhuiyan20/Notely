@@ -55,6 +55,60 @@ class AppSnackbar {
       ..showSnackBar(snackBar);
   }
 
+  /// Async-safe variant of [info]. Use when you've already crossed an
+  /// `await` and no longer trust the [BuildContext] to still be mounted.
+  static void showInfo(ScaffoldMessengerState messenger, String message) {
+    _showOn(messenger, message, AppColors.royalBlue, Icons.info_rounded);
+  }
+
+  /// Async-safe variant of [success].
+  static void showSuccess(ScaffoldMessengerState messenger, String message) {
+    _showOn(messenger, message, AppColors.success, Icons.check_circle_rounded);
+  }
+
+  /// Async-safe variant of [error].
+  static void showError(ScaffoldMessengerState messenger, String message) {
+    _showOn(messenger, message, AppColors.error, Icons.error_rounded);
+  }
+
+  static void _showOn(
+    ScaffoldMessengerState messenger,
+    String message,
+    Color backgroundColor,
+    IconData icon,
+  ) {
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(icon, color: Colors.white, size: 22),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  message,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: backgroundColor,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          duration: const Duration(seconds: 3),
+          elevation: 6,
+        ),
+      );
+  }
+
   static void _show(
     BuildContext context, {
     required String message,

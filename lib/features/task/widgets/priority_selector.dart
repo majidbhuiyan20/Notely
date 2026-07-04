@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import '../model/note_data.dart';
 import 'meta_row.dart';
 
-/// Tappable row used inside the create/edit form to choose a priority.
-/// Visually mirrors the read-only [ColorChip] used in the task details
-/// screen so the picker and the displayed value stay consistent.
+/// Polished 3-segment pill selector. Selected segment fills with the
+/// priority's brand colour, the others stay neutral. Animates on tap so
+/// the user gets clear feedback.
 class PrioritySelector extends StatelessWidget {
   const PrioritySelector({
     super.key,
@@ -17,23 +17,37 @@ class PrioritySelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: [
-        for (final p in NotePriority.values)
-          _PriorityChip(
-            priority: p,
-            onTap: () => onPrioritySelected(p),
-          ),
-      ],
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF2F2F7),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          for (final p in NotePriority.values)
+            Expanded(
+              child: _Segment(
+                priority: p,
+                selected: p == initialPriority,
+                onTap: () => onPrioritySelected(p),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
 
-class _PriorityChip extends StatelessWidget {
-  const _PriorityChip({required this.priority, required this.onTap});
+class _Segment extends StatelessWidget {
+  const _Segment({
+    required this.priority,
+    required this.selected,
+    required this.onTap,
+  });
+
   final NotePriority priority;
+  final bool selected;
   final VoidCallback onTap;
 
   @override
@@ -46,37 +60,49 @@ class _PriorityChip extends StatelessWidget {
       NotePriority.low => Icons.south_rounded,
     };
 
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+      decoration: BoxDecoration(
+        color: selected ? color : Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          if (selected)
             BoxShadow(
-              color: color.withOpacity(0.25),
-              blurRadius: 6,
-              offset: const Offset(0, 3),
+              color: color.withValues(alpha: 0.35),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
             ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 14, color: Colors.white),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-                fontSize: 13,
-                letterSpacing: 0.2,
-              ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  icon,
+                  size: 16,
+                  color: selected ? Colors.white : color,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: selected ? Colors.white : const Color(0xFF1E1E1E),
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

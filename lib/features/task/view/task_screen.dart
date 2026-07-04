@@ -101,6 +101,15 @@ class _TaskScreenState extends ConsumerState<TaskScreen> {
     Navigator.of(context).pop();
   }
 
+  Future<void> _togglePin(NoteData note) async {
+    final updated = await ref.read(tasksProvider.notifier).togglePin(note.id);
+    if (!mounted || updated == null) return;
+    AppSnackbar.info(
+      context,
+      updated.isPinned ? 'Pinned to top' : 'Unpinned',
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final notes = ref.watch(tasksProvider).value ?? const [];
@@ -128,6 +137,19 @@ class _TaskScreenState extends ConsumerState<TaskScreen> {
       appBar: NotelyAppBar(
         title: 'Note Details',
         actions: [
+          IconButton(
+            onPressed: () => _togglePin(note),
+            icon: Icon(
+              note.isPinned
+                  ? Icons.push_pin_rounded
+                  : Icons.push_pin_outlined,
+              color: note.isPinned
+                  ? AppColors.royalBlue
+                  : const Color(0xFF1E1E1E),
+              size: 22,
+            ),
+            tooltip: note.isPinned ? 'Unpin' : 'Pin to top',
+          ),
           IconButton(
             onPressed: _openEdit,
             icon: const Icon(Icons.edit_outlined,

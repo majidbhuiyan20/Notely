@@ -11,7 +11,7 @@ class TaskLocalDataSource {
 
   static const _dbName = 'notely.db';
   static const _table = 'tasks';
-  static const _schemaVersion = 1;
+  static const _schemaVersion = 2;
 
   final Database? _dbOverride;
   Database? _db;
@@ -41,6 +41,7 @@ class TaskLocalDataSource {
             assignee TEXT NOT NULL,
             reminder TEXT NOT NULL,
             checklist_json TEXT NOT NULL,
+            is_pinned INTEGER NOT NULL DEFAULT 0,
             updated_at INTEGER NOT NULL,
             PRIMARY KEY (uid, id)
           );
@@ -49,6 +50,22 @@ class TaskLocalDataSource {
           'CREATE INDEX idx_tasks_uid_due_iso '
           'ON $_table(uid, due_date_iso);',
         );
+        await db.execute(
+          'CREATE INDEX idx_tasks_uid_pinned '
+          'ON $_table(uid, is_pinned);',
+        );
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        // v1 → v2: add is_pinned column for the pin/unpin feature.
+        if (oldVersion < 2) {
+          await db.execute(
+            'ALTER TABLE $_table ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0;',
+          );
+          await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_tasks_uid_pinned '
+            'ON $_table(uid, is_pinned);',
+          );
+        }
       },
     );
     return _db!;

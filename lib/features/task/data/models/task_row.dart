@@ -24,6 +24,7 @@ class TaskRow {
     required this.assignee,
     required this.reminder,
     required this.checklistJson,
+    required this.isPinned,
     required this.updatedAt,
   });
 
@@ -41,6 +42,7 @@ class TaskRow {
   final String assignee;
   final String reminder;
   final String checklistJson;
+  final bool isPinned;
   final int updatedAt;
 
   Map<String, Object?> toDb() => {
@@ -58,6 +60,7 @@ class TaskRow {
         'assignee': assignee,
         'reminder': reminder,
         'checklist_json': checklistJson,
+        'is_pinned': isPinned ? 1 : 0,
         'updated_at': updatedAt,
       };
 
@@ -78,6 +81,7 @@ class TaskRow {
       assignee: (row['assignee'] as String?) ?? '',
       reminder: (row['reminder'] as String?) ?? '',
       checklistJson: (row['checklist_json'] as String?) ?? '[]',
+      isPinned: ((row['is_pinned'] as int?) ?? 0) != 0,
       updatedAt: (row['updated_at'] as int?) ?? 0,
     );
   }
@@ -98,6 +102,7 @@ class TaskRow {
       dueDateIso: dueDateIso,
       assignee: assignee,
       reminder: reminder,
+      isPinned: isPinned,
       checklist: _decodeChecklist(checklistJson),
     );
   }
@@ -124,6 +129,7 @@ class TaskRow {
       checklistJson: jsonEncode(
         note.checklist.map((c) => c.toJson()).toList(),
       ),
+      isPinned: note.isPinned,
       updatedAt: updatedAt ?? DateTime.now().millisecondsSinceEpoch,
     );
   }

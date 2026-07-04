@@ -50,6 +50,7 @@ class NoteData {
     this.assignee = '',
     this.reminder = '',
     this.dueDateIso,
+    this.isPinned = false,
     List<ChecklistItemModel>? checklist,
   }) : checklist = checklist ?? [];
 
@@ -64,6 +65,10 @@ class NoteData {
   String dueDate;
   String assignee;
   String reminder;
+
+  /// Whether the user pinned this note. Persisted to sqflite + Firestore.
+  /// Pinned notes float to the top of every list that shows them.
+  bool isPinned;
 
   /// ISO-8601 date (yyyy-MM-dd) used by the calendar feature to key notes
   /// by the day they're due. `null` when no due date is set; the existing
@@ -91,6 +96,7 @@ class NoteData {
         assignee: assignee,
         reminder: reminder,
         dueDateIso: dueDateIso,
+        isPinned: isPinned,
         checklist:
             checklist.map((c) => c.copy()).toList(growable: false),
       );

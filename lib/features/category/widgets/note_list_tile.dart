@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../../core/route/app_route.dart';
 import '../../task/model/note_data.dart';
+import '../../task/providers/notes_providers.dart';
 import '../../task/widgets/meta_row.dart';
+import '../../widgets/note_actions_sheet.dart';
 
 /// A single note row inside the Category Details list.
-/// Tap navigates to the task screen.
-class NoteListTile extends StatelessWidget {
+/// Tap navigates to the task screen. Long-press opens the action sheet.
+/// The status checkbox is wired through [TasksNotifier.upsert] so the
+/// toggle survives a relaunch.
+class NoteListTile extends ConsumerWidget {
   const NoteListTile({
     super.key,
     required this.note,
@@ -15,8 +21,15 @@ class NoteListTile extends StatelessWidget {
   final NoteData note;
   final VoidCallback? onTap;
 
+  Future<void> _toggleStatus(WidgetRef ref) async {
+    note.status = note.status == NoteStatus.completed
+        ? NoteStatus.pending
+        : NoteStatus.completed;
+    await ref.read(tasksProvider.notifier).upsert(note);
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final pColor = priorityColor(note.priority);
     final sColor = statusColor(note.status);
 
@@ -28,6 +41,7 @@ class NoteListTile extends StatelessWidget {
                 Routes.taskRoute,
                 arguments: note.id,
               ),
+      onLongPress: () => showNoteActionsSheet(context, note),
       child: Container(
         padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
         decoration: BoxDecoration(
@@ -35,7 +49,7 @@ class NoteListTile extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.04),
+              color: Colors.black.withValues(alpha: 0.04),
               blurRadius: 10,
               offset: const Offset(0, 2),
             ),
@@ -46,12 +60,7 @@ class NoteListTile extends StatelessWidget {
           children: [
             // Checkbox
             GestureDetector(
-              onTap: () {
-                note.status = note.status == NoteStatus.completed
-                    ? NoteStatus.pending
-                    : NoteStatus.completed;
-                (context as Element).markNeedsBuild();
-              },
+              onTap: () => _toggleStatus(ref),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 height: 24,
@@ -80,20 +89,35 @@ class NoteListTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    note.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF1E1E1E),
-                      decoration: note.status == NoteStatus.completed
-                          ? TextDecoration.lineThrough
-                          : null,
-                      decorationColor: Colors.grey.shade400,
-                      height: 1.25,
-                    ),
+                  Row(
+                    children: [
+                      if (note.isPinned)
+                        const Padding(
+                          padding: EdgeInsets.only(right: 6),
+                          child: Icon(
+                            Icons.push_pin_rounded,
+                            size: 14,
+                            color: Color(0xFF4169E1),
+                          ),
+                        ),
+                      Expanded(
+                        child: Text(
+                          note.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF1E1E1E),
+                            decoration: note.status == NoteStatus.completed
+                                ? TextDecoration.lineThrough
+                                : null,
+                            decorationColor: Colors.grey.shade400,
+                            height: 1.25,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -166,7 +190,7 @@ class _MiniChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bg = neutral ? const Color(0xFFF2F2F7) : color.withOpacity(0.12);
+    final bg = neutral ? const Color(0xFFF2F2F7) : color.withValues(alpha: 0.12);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(

@@ -10,6 +10,7 @@ import '../../widgets/search_field.dart';
 import '../../widgets/title_section.dart';
 import '../widgets/greeting_header.dart';
 import '../widgets/quick_stats_row.dart';
+import '../widgets/recent_notes_row.dart';
 import '../widgets/today_section.dart';
 
 /// Rebuilt home screen. Reads from [notesProvider] and the auth notifier
@@ -75,18 +76,20 @@ class HomeScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 24),
             TitleSection(
-              title: 'Pinned Note',
+              title: 'Pinned Notes',
               showSeeAll: false,
             ),
             const SizedBox(height: 12),
-            const NoteList(),
+            const NoteList(pinned: true),
+            const SizedBox(height: 24),
+            const RecentNotesRow(),
             const SizedBox(height: 24),
             TitleSection(
               title: 'All Notes',
               showSeeAll: false,
             ),
             const SizedBox(height: 12),
-            const NoteList(compact: false),
+            const NoteList(pinned: false),
           ],
         ),
       ),

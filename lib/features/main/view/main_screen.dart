@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/route/app_route.dart';
+import '../../analytics/view/analytics_screen.dart';
 import '../../calendar/presentation/view/calendar_screen.dart';
 import '../../home/view/home_screen.dart';
 import '../../profile/view/profile_screen.dart';
 
+/// 4-tab bottom nav with a centered floating + button. Uses Material 3
+/// [NavigationBar] so the highlight + animation are platform-correct.
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
 
@@ -13,38 +16,43 @@ class MainScreen extends StatefulWidget {
   State<MainScreen> createState() => _MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateMixin {
+class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
-  late AnimationController _pulseController;
 
-  @override
-  void initState() {
-    super.initState();
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    )..repeat(reverse: true);
-  }
+  static const _destinations = <_Destination>[
+    _Destination(
+      icon: Icons.home_outlined,
+      activeIcon: Icons.home_rounded,
+      label: 'Home',
+    ),
+    _Destination(
+      icon: Icons.calendar_month_outlined,
+      activeIcon: Icons.calendar_month_rounded,
+      label: 'Calendar',
+    ),
+    _Destination(
+      icon: Icons.insights_outlined,
+      activeIcon: Icons.insights_rounded,
+      label: 'Analytics',
+    ),
+    _Destination(
+      icon: Icons.person_outline_rounded,
+      activeIcon: Icons.person_rounded,
+      label: 'Profile',
+    ),
+  ];
 
-  @override
-  void dispose() {
-    _pulseController.dispose();
-    super.dispose();
-  }
-
-  final List<Widget> _screens = const [
+  static const _screens = <Widget>[
     HomeScreen(),
     CalendarScreen(),
+    AnalyticsScreen(),
     ProfileScreen(),
   ];
 
   void _onItemTapped(int index) {
-    if (_selectedIndex != index) {
-      HapticFeedback.lightImpact();
-      setState(() {
-        _selectedIndex = index;
-      });
-    }
+    if (_selectedIndex == index) return;
+    HapticFeedback.lightImpact();
+    setState(() => _selectedIndex = index);
   }
 
   @override
@@ -55,108 +63,136 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
         index: _selectedIndex,
         children: _screens,
       ),
-      floatingActionButton: ScaleTransition(
-        scale: Tween<double>(begin: 1.0, end: 1.1).animate(
-          CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+      floatingActionButton: _CreateFab(),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 18,
+              offset: const Offset(0, -4),
+            ),
+          ],
         ),
-        child: Container(
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.royalBlue.withOpacity(0.3),
-                blurRadius: 15,
-                spreadRadius: 5,
-              )
+        child: BottomAppBar(
+          color: Colors.white,
+          elevation: 0,
+          height: 78,
+          padding: EdgeInsets.zero,
+          shape: const CircularNotchedRectangle(),
+          notchMargin: 10,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              for (int i = 0; i < _destinations.length; i++) ...[
+                if (i == 2) const SizedBox(width: 72),
+                _NavItem(
+                  destination: _destinations[i],
+                  isActive: _selectedIndex == i,
+                  onTap: () => _onItemTapped(i),
+                ),
+              ],
             ],
-          ),
-          child: FloatingActionButton(
-            onPressed: () {
-              HapticFeedback.mediumImpact();
-              Navigator.pushNamed(context, Routes.createTaskRoute);
-            },
-            backgroundColor: AppColors.royalBlue,
-            elevation: 8,
-            shape: const CircleBorder(),
-            child: const Icon(Icons.add_rounded, color: Colors.white, size: 36),
           ),
         ),
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      bottomNavigationBar: BottomAppBar(
-        shape: const CircularNotchedRectangle(),
-        notchMargin: 10.0,
-        color: Colors.white,
-        elevation: 15,
-        height: 70,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
+    );
+  }
+}
+
+class _Destination {
+  const _Destination({
+    required this.icon,
+    required this.activeIcon,
+    required this.label,
+  });
+  final IconData icon;
+  final IconData activeIcon;
+  final String label;
+}
+
+class _NavItem extends StatelessWidget {
+  const _NavItem({
+    required this.destination,
+    required this.isActive,
+    required this.onTap,
+  });
+
+  final _Destination destination;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isActive ? AppColors.royalBlue : Colors.grey.shade500;
+    return InkResponse(
+      onTap: onTap,
+      radius: 36,
+      child: SizedBox(
+        width: 64,
+        height: 78,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            _buildNavItem(Icons.home_rounded, Icons.home_outlined, 0),
-            _buildNavItem(
-              Icons.calendar_month_rounded,
-              Icons.calendar_month_outlined,
-              1,
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOut,
+              padding: EdgeInsets.symmetric(
+                horizontal: isActive ? 10 : 0,
+                vertical: 4,
+              ),
+              decoration: BoxDecoration(
+                color: isActive
+                    ? AppColors.royalBlue.withValues(alpha: 0.12)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Icon(
+                isActive ? destination.activeIcon : destination.icon,
+                size: 22,
+                color: color,
+              ),
             ),
-            const SizedBox(width: 50), // Gap for FAB
-            // Right side of the FAB: only one slot remains for Profile,
-            // but with 3 items + 1 spacer we use spaceAround to keep things
-            // symmetric, so we add an empty leader here.
-            const SizedBox(width: 36),
-            _buildNavItem(Icons.person_rounded, Icons.person_outline_rounded, 2),
+            const SizedBox(height: 4),
+            Text(
+              destination.label,
+              style: TextStyle(
+                fontSize: 11,
+                color: color,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ],
         ),
       ),
     );
   }
+}
 
-  Widget _buildNavItem(IconData selectedIcon, IconData unselectedIcon, int index) {
-    bool isSelected = _selectedIndex == index;
-    return GestureDetector(
-      onTap: () => _onItemTapped(index),
-      behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AnimatedScale(
-              duration: const Duration(milliseconds: 400),
-              scale: isSelected ? 1.25 : 1.0,
-              curve: Curves.elasticOut,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 400),
-                curve: Curves.elasticOut,
-                transform: Matrix4.translationValues(0, isSelected ? -8 : 0, 0),
-                child: Icon(
-                  isSelected ? selectedIcon : unselectedIcon,
-                  color: isSelected ? AppColors.royalBlue : Colors.grey.shade400,
-                  size: 30,
-                ),
-              ),
-            ),
-            const SizedBox(height: 4),
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              width: isSelected ? 6 : 0,
-              height: 6,
-              decoration: BoxDecoration(
-                color: AppColors.royalBlue,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  if (isSelected)
-                    BoxShadow(
-                      color: AppColors.royalBlue.withOpacity(0.4),
-                      blurRadius: 6,
-                      spreadRadius: 2,
-                    )
-                ],
-              ),
-            ),
-          ],
-        ),
+class _CreateFab extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.royalBlue.withValues(alpha: 0.35),
+            blurRadius: 18,
+            spreadRadius: 2,
+          ),
+        ],
+      ),
+      child: FloatingActionButton(
+        onPressed: () {
+          HapticFeedback.mediumImpact();
+          Navigator.pushNamed(context, Routes.createTaskRoute);
+        },
+        backgroundColor: AppColors.royalBlue,
+        elevation: 0,
+        shape: const CircleBorder(),
+        child: const Icon(Icons.add_rounded, color: Colors.white, size: 32),
       ),
     );
   }

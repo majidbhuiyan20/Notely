@@ -1,6 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../authentication/presentation/providers/auth_providers.dart';
+
+// Top-level pure functions so they can never end up as torn-off closures
+// in widget rebuilds. Bug history: an earlier version of this widget
+// rendered `Closure: () => String from Function '_greetingForNow@…'` when
+// the build pipeline called a private method as a tear-off.
+const _weekdays = [
+  'Monday', 'Tuesday', 'Wednesday', 'Thursday',
+  'Friday', 'Saturday', 'Sunday',
+];
+const _months = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+String _todayLabel(DateTime now) {
+  return '${_weekdays[now.weekday - 1].toUpperCase()}, '
+      '${_months[now.month - 1].toUpperCase()} ${now.day}';
+}
+
+String _greetingForNow(DateTime now) {
+  final h = now.hour;
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
 
 /// Top-of-home header. Greets the user by their first name and shows
 /// their Google avatar when available, otherwise a gradient monogram
@@ -8,31 +34,13 @@ import '../../authentication/presentation/providers/auth_providers.dart';
 class GreetingHeader extends ConsumerWidget {
   const GreetingHeader({super.key});
 
-  String _greetingForNow() {
-    final h = DateTime.now().hour;
-    if (h < 12) return 'Good morning';
-    if (h < 17) return 'Good afternoon';
-    return 'Good evening';
-  }
-
-  String _todayLabel() {
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
-    const weekdays = [
-      'Monday', 'Tuesday', 'Wednesday', 'Thursday',
-      'Friday', 'Saturday', 'Sunday',
-    ];
-    final now = DateTime.now();
-    return '${weekdays[now.weekday - 1]}, ${months[now.month - 1]} ${now.day}';
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Watch the auth state so we rebuild when the user changes.
     final auth = ref.watch(authNotifierProvider);
     final user = auth.value;
-    final name = user?.firstName ?? 'there';
+    final now = DateTime.now();
+    final name = (user?.firstName.isNotEmpty ?? false) ? user!.firstName : 'there';
     final email = user?.email ?? '';
     final photoUrl = user?.photoUrl;
 
@@ -47,7 +55,7 @@ class GreetingHeader extends ConsumerWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF4169E1).withOpacity(0.3),
+            color: const Color(0xFF4169E1).withValues(alpha: 0.3),
             blurRadius: 18,
             offset: const Offset(0, 8),
           ),
@@ -60,7 +68,7 @@ class GreetingHeader extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _todayLabel().toUpperCase(),
+                  _todayLabel(now),
                   style: const TextStyle(
                     fontSize: 11,
                     color: Colors.white70,
@@ -70,7 +78,7 @@ class GreetingHeader extends ConsumerWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  '$_greetingForNow(), $name',
+                  '${_greetingForNow(now)}, $name',
                   style: const TextStyle(
                     fontSize: 22,
                     color: Colors.white,
@@ -112,7 +120,7 @@ class _Avatar extends StatelessWidget {
     final fallback = Container(
       width: 56,
       height: 56,
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         shape: BoxShape.circle,
         color: Colors.white,
       ),

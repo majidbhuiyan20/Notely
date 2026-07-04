@@ -20,6 +20,7 @@ class CategoryDetailsScreen extends StatefulWidget {
 class _CategoryDetailsScreenState extends State<CategoryDetailsScreen> {
   CategoryFilter _filter = CategoryFilter.all;
   bool _sortByPriority = true;
+  String _search = '';
   late final NotesRepository _repo;
 
   @override
@@ -66,6 +67,13 @@ class _CategoryDetailsScreenState extends State<CategoryDetailsScreen> {
       case CategoryFilter.completed:
         source = source.where((n) => n.status == NoteStatus.completed);
         break;
+    }
+
+    if (_search.trim().isNotEmpty) {
+      final q = _search.toLowerCase();
+      source = source.where((n) =>
+          n.title.toLowerCase().contains(q) ||
+          n.description.toLowerCase().contains(q));
     }
 
     final list = source.toList();
@@ -119,6 +127,12 @@ class _CategoryDetailsScreenState extends State<CategoryDetailsScreen> {
             pendingCount: pendingCount,
             completedCount: completedCount,
             color: stats.color,
+          ),
+          const SizedBox(height: 12),
+          _SearchField(
+            value: _search,
+            color: stats.color,
+            onChanged: (v) => setState(() => _search = v),
           ),
           const SizedBox(height: 12),
           _SortRow(
@@ -267,19 +281,28 @@ class _CreateTaskFab extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        shape: BoxShape.circle,
+        borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: color.withOpacity(0.35),
-            blurRadius: 15,
-            spreadRadius: 4,
+            color: color.withValues(alpha: 0.35),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
-      child: FloatingActionButton(
+      child: FloatingActionButton.extended(
         backgroundColor: color,
+        foregroundColor: Colors.white,
         elevation: 6,
-        shape: const CircleBorder(),
+        icon: const Icon(Icons.add_rounded, color: Colors.white, size: 24),
+        label: const Text(
+          'New note',
+          style: TextStyle(
+            fontWeight: FontWeight.w800,
+            fontSize: 14,
+            letterSpacing: 0.3,
+          ),
+        ),
         onPressed: () {
           final initial = categoryName == 'All Notes' ? null : categoryName;
           Navigator.pushNamed(
@@ -288,8 +311,55 @@ class _CreateTaskFab extends StatelessWidget {
             arguments: initial,
           );
         },
-        tooltip: 'New Note',
-        child: const Icon(Icons.add_rounded, color: Colors.white, size: 32),
+      ),
+    );
+  }
+}
+
+class _SearchField extends StatelessWidget {
+  const _SearchField({
+    required this.value,
+    required this.color,
+    required this.onChanged,
+  });
+
+  final String value;
+  final Color color;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: TextField(
+        onChanged: onChanged,
+        decoration: InputDecoration(
+          hintText: 'Search this category…',
+          hintStyle: TextStyle(
+            color: Colors.grey.shade500,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+          prefixIcon: Icon(Icons.search_rounded, color: color, size: 22),
+          suffixIcon: value.isEmpty
+              ? null
+              : IconButton(
+                  icon: const Icon(Icons.close_rounded, size: 18),
+                  onPressed: () => onChanged(''),
+                ),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(vertical: 14),
+        ),
       ),
     );
   }
