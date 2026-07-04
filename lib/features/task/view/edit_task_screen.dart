@@ -12,73 +12,76 @@ import 'task_form.dart';
 /// Edit screen for an existing note. Mirrors [CreateTaskScreen] layout.
 /// On Save the updated note is persisted to sqflite (and pushed to
 /// Firestore in the background) via [TasksNotifier].
-class EditTaskScreen extends ConsumerStatefulWidget {
+///
+/// Busy state lives in a [ValueNotifier] so toggling it doesn't trigger
+/// a full rebuild that could race with Riverpod's provider rebuild chain.
+/// The note being edited is derived from [tasksProvider] so the screen
+/// itself is a stateless [ConsumerWidget] — no `setState`, no hydration
+/// race.
+class EditTaskScreen extends ConsumerWidget {
   const EditTaskScreen({super.key, this.noteId});
   final String? noteId;
 
   @override
-  ConsumerState<EditTaskScreen> createState() => _EditTaskScreenState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final accent = AppColors.royalBlue;
+    final id = noteId;
+    final list = ref.watch(tasksProvider).value ?? const [];
+    final note = id == null
+        ? null
+        : list.cast<NoteData?>().firstWhere(
+            (n) => n?.id == id,
+            orElse: () => null,
+          );
+
+    if (note == null) {
+      return _NoteNotFound(accent: accent);
+    }
+
+    return _EditTaskScreenBody(note: note, accent: accent);
+  }
 }
 
-class _EditTaskScreenState extends ConsumerState<EditTaskScreen> {
-  NoteData? _note;
-  TaskFormController? _form;
-  bool _busy = false;
+class _EditTaskScreenBody extends ConsumerStatefulWidget {
+  const _EditTaskScreenBody({required this.note, required this.accent});
+  final NoteData note;
+  final Color accent;
+
+  @override
+  ConsumerState<_EditTaskScreenBody> createState() =>
+      _EditTaskScreenBodyState();
+}
+
+class _EditTaskScreenBodyState extends ConsumerState<_EditTaskScreenBody> {
+  late final TaskFormController _form;
+  final ValueNotifier<bool> _busy = ValueNotifier<bool>(false);
 
   @override
   void initState() {
     super.initState();
-    // Wait for the next frame so `ref` is ready, then hydrate from the
-    // list already loaded by the splash/tasksProvider.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _hydrate();
-    });
-  }
-
-  void _hydrate() {
-    final id = widget.noteId;
-    if (id == null) return;
-    final list = ref.read(tasksProvider).value ?? const [];
-    final note = list.cast<NoteData?>().firstWhere(
-          (n) => n?.id == id,
-          orElse: () => null,
-        );
-    if (note == null) return;
-    setState(() {
-      _note = note;
-      _form = TaskFormController(
-        title: note.title,
-        description: note.description,
-        category: note.category,
-        priority: note.priority,
-        dueDate:
-            note.dueDateIso == null ? null : _parseIso(note.dueDateIso!),
-        dueTime: note.dueTime,
-        checklist: note.checklist,
-      );
-      _form!.onChanged = () {
-        if (mounted) setState(() {});
-      };
-    });
+    final note = widget.note;
+    _form = TaskFormController(
+      title: note.title,
+      description: note.description,
+      category: note.category,
+      priority: note.priority,
+      dueDate: note.dueDateIso == null ? null : _parseIso(note.dueDateIso!),
+      dueTime: note.dueTime,
+      checklist: note.checklist,
+    );
   }
 
   @override
   void dispose() {
-    _form?.dispose();
+    _form.dispose();
+    _busy.dispose();
     super.dispose();
   }
 
   Future<void> _save() async {
-    if (_busy) return;
-    final note = _note;
-    final form = _form;
-    if (note == null || form == null) {
-      Navigator.pop(context);
-      return;
-    }
-
-    final snap = form.snapshot();
-    final updated = note.copy();
+    if (_busy.value) return;
+    final snap = _form.snapshot();
+    final updated = widget.note.copy();
     updated.title = snap.title.isEmpty ? 'Untitled' : snap.title;
     updated.description = snap.description;
     updated.category = snap.category;
@@ -94,7 +97,7 @@ class _EditTaskScreenState extends ConsumerState<EditTaskScreen> {
     updated.categoryColor = meta.color;
     updated.categoryIcon = meta.icon;
 
-    setState(() => _busy = true);
+    _busy.value = true;
     try {
       await ref.read(tasksProvider.notifier).upsert(updated);
       if (!mounted) return;
@@ -104,7 +107,7 @@ class _EditTaskScreenState extends ConsumerState<EditTaskScreen> {
       if (!mounted) return;
       AppSnackbar.error(context, e.toString());
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) _busy.value = false;
     }
   }
 
@@ -138,56 +141,33 @@ class _EditTaskScreenState extends ConsumerState<EditTaskScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final accent = AppColors.royalBlue;
-    final form = _form;
-
-    if (form == null || _note == null) {
-      return Scaffold(
-        backgroundColor: const Color(0xFFF2F2F7),
-        appBar: NotelyAppBar(
-          title: 'Edit Note',
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
-            ),
-            const SizedBox(width: 8),
-          ],
-        ),
-        body: const Center(
-          child: Text(
-            'Note not found',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: Colors.black54,
-            ),
-          ),
-        ),
-      );
-    }
-
+    final accent = widget.accent;
     return Scaffold(
       backgroundColor: const Color(0xFFF2F2F7),
       appBar: NotelyAppBar(
         title: 'Edit Note',
         actions: [
-          TextButton(
-            onPressed: _busy ? null : _save,
-            style: TextButton.styleFrom(foregroundColor: accent),
-            child: _busy
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2.5),
-                  )
-                : const Text(
-                    'Save',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+          ValueListenableBuilder<bool>(
+            valueListenable: _busy,
+            builder: (context, busy, _) {
+              return TextButton(
+                onPressed: busy ? null : _save,
+                style: TextButton.styleFrom(foregroundColor: accent),
+                child: busy
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2.5),
+                      )
+                    : const Text(
+                        'Save',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+              );
+            },
           ),
           const SizedBox(width: 8),
         ],
@@ -195,16 +175,56 @@ class _EditTaskScreenState extends ConsumerState<EditTaskScreen> {
       body: Column(
         children: [
           Expanded(
-            child: TaskFormBody(controller: form),
+            child: TaskFormBody(controller: _form),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-            child: TaskFormSaveButton(
-              label: _busy ? 'SAVING…' : 'SAVE CHANGES',
-              onPressed: _busy ? null : _save,
-            ),
+          ValueListenableBuilder<bool>(
+            valueListenable: _busy,
+            builder: (context, busy, _) {
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                child: TaskFormSaveButton(
+                  label: busy ? 'SAVING…' : 'SAVE CHANGES',
+                  onPressed: busy ? null : _save,
+                ),
+              );
+            },
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Empty state for [EditTaskScreen] when the requested note id can't be
+/// found in [tasksProvider]. Kept as a dedicated widget so the parent
+/// stays a stateless [ConsumerWidget].
+class _NoteNotFound extends StatelessWidget {
+  const _NoteNotFound({required this.accent});
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF2F2F7),
+      appBar: NotelyAppBar(
+        title: 'Edit Note',
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
+      body: const Center(
+        child: Text(
+          'Note not found',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: Colors.black54,
+          ),
+        ),
       ),
     );
   }

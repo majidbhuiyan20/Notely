@@ -5,6 +5,7 @@ import '../../core/route/app_route.dart';
 import '../task/model/note_data.dart';
 import '../task/model/notes_repository.dart' show comparePriority;
 import '../task/providers/notes_providers.dart';
+import '../task/providers/search_providers.dart';
 import '../widgets/note_actions_sheet.dart';
 
 /// Renders a list of notes. Two modes:
@@ -31,12 +32,16 @@ class NoteList extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final all = ref.watch(notesListProvider);
+    final filtered = ref.watch(filteredNotesProvider);
+
+    // Apply search filter if any. `filtered == null` means "no filter".
+    final source = filtered ?? all;
     final list = pinned
-        ? ref.watch(pinnedNotesProvider)
-        : _sortForAllNotes(all);
+        ? _filterPinned(source)
+        : _sortForAllNotes(source);
 
     if (list.isEmpty) {
-      return _EmptyList(pinned: pinned);
+      return _EmptyList(pinned: pinned, query: filtered != null);
     }
 
     if (scrollHorizontal || pinned) {
@@ -65,6 +70,12 @@ class NoteList extends ConsumerWidget {
           ),
       ],
     );
+  }
+
+  List<NoteData> _filterPinned(List<NoteData> source) {
+    final pinned = source.where((n) => n.isPinned).toList()
+      ..sort((a, b) => comparePriority(a.priority, b.priority));
+    return pinned;
   }
 
   List<NoteData> _sortForAllNotes(List<NoteData> notes) {
@@ -185,14 +196,27 @@ class _NoteCard extends ConsumerWidget {
 }
 
 class _EmptyList extends StatelessWidget {
-  const _EmptyList({required this.pinned});
+  const _EmptyList({required this.pinned, this.query = false});
   final bool pinned;
+
+  /// True when the empty state is the result of a search that matched
+  /// nothing (rather than an actually empty list).
+  final bool query;
 
   @override
   Widget build(BuildContext context) {
-    final text = pinned
-        ? 'Long-press any note and choose Pin to top to surface it here.'
-        : 'No notes yet — tap + to add your first one!';
+    final String text;
+    final IconData icon;
+    if (query) {
+      text = 'No notes match your search.';
+      icon = Icons.search_off_rounded;
+    } else if (pinned) {
+      text = 'Long-press any note and choose Pin to top to surface it here.';
+      icon = Icons.push_pin_outlined;
+    } else {
+      text = 'No notes yet — tap + to add your first one!';
+      icon = Icons.note_alt_outlined;
+    }
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
       decoration: BoxDecoration(
@@ -203,7 +227,7 @@ class _EmptyList extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-            pinned ? Icons.push_pin_outlined : Icons.note_alt_outlined,
+            icon,
             color: Colors.grey.shade400,
             size: 18,
           ),

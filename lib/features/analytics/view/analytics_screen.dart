@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../task/providers/notes_providers.dart';
 import '../data/analytics_repository.dart';
+import '../providers/analytics_providers.dart';
 
 /// Analytics tab. Reads notes from the cached [notesListProvider]
 /// (no Firestore reads — that's intentional, the cache is the source
@@ -15,22 +16,18 @@ import '../data/analytics_repository.dart';
 ///   * Primary fl_chart visualisation, shape depends on range.
 ///   * Category pie chart with legend.
 ///   * 3 KPI tiles: total, completed, completion-rate.
-class AnalyticsScreen extends ConsumerStatefulWidget {
+class AnalyticsScreen extends ConsumerWidget {
   const AnalyticsScreen({super.key});
 
-  @override
-  ConsumerState<AnalyticsScreen> createState() => _AnalyticsScreenState();
-}
-
-class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
-  AnalyticsRange _range = AnalyticsRange.week;
-  final _repository = const AnalyticsRepository();
+  static const _repository = AnalyticsRepository();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final notes = ref.watch(notesListProvider);
+    final range = ref.watch(analyticsRangeProvider);
     final summary = _repository.summary(notes);
-    final buckets = _repository.tasksForRange(notes, _range, DateTime.now());
+    final buckets =
+        _repository.tasksForRange(notes, range, DateTime.now());
     final slices = _repository.categoryCounts(notes);
 
     return Scaffold(
@@ -41,15 +38,16 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
           physics: const BouncingScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
           children: [
-            _Header(),
+            const _Header(),
             const SizedBox(height: 16),
             _RangeSelector(
-              value: _range,
-              onChanged: (r) => setState(() => _range = r),
+              value: range,
+              onChanged: (r) =>
+                  ref.read(analyticsRangeProvider.notifier).set(r),
             ),
             const SizedBox(height: 20),
             _PrimaryChartCard(
-              range: _range,
+              range: range,
               buckets: buckets,
             ),
             const SizedBox(height: 20),
@@ -64,6 +62,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
 }
 
 class _Header extends StatelessWidget {
+  const _Header();
   @override
   Widget build(BuildContext context) {
     return Row(

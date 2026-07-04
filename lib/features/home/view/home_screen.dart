@@ -4,6 +4,7 @@ import '../../../core/route/app_route.dart';
 import '../../category/model/category_model.dart';
 import '../../task/model/note_data.dart';
 import '../../task/providers/notes_providers.dart';
+import '../../task/providers/search_providers.dart';
 import '../../widgets/category_card.dart';
 import '../../widgets/note_list.dart';
 import '../../widgets/search_field.dart';
@@ -14,13 +15,23 @@ import '../widgets/recent_notes_row.dart';
 import '../widgets/today_section.dart';
 
 /// Rebuilt home screen. Reads from [notesProvider] and the auth notifier
-/// instead of using the repository singleton directly.
+/// instead of using the repository singleton directly. The search field
+/// at the top drives [searchQueryProvider]; the lists below auto-filter
+/// via [filteredNotesProvider].
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final notes = ref.watch(notesProvider);
+    final allNotes = ref.watch(notesProvider);
+    // When the search field is non-empty, swap to the filtered list for
+    // category counts + the section titles. When empty, keep the full
+    // list (cheaper + matches user expectation of "see everything").
+    final filtered = ref.watch(filteredNotesProvider);
+    final notes = filtered ?? allNotes;
+    final hasQuery = ref.watch(
+      searchQueryProvider.select((s) => s.trim().isNotEmpty),
+    );
     final categories = _categoriesWithCounts(notes);
 
     return Scaffold(
@@ -75,21 +86,32 @@ class HomeScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 24),
-            TitleSection(
-              title: 'Pinned Notes',
-              showSeeAll: false,
-            ),
-            const SizedBox(height: 12),
-            const NoteList(pinned: true),
-            const SizedBox(height: 24),
-            const RecentNotesRow(),
-            const SizedBox(height: 24),
-            TitleSection(
-              title: 'All Notes',
-              showSeeAll: false,
-            ),
-            const SizedBox(height: 12),
-            const NoteList(pinned: false),
+            // When the user has typed a query we collapse the home
+            // view into a single "Search results" section. Less noise.
+            if (hasQuery) ...[
+              TitleSection(
+                title: 'Search results',
+                showSeeAll: false,
+              ),
+              const SizedBox(height: 12),
+              const NoteList(pinned: false),
+            ] else ...[
+              TitleSection(
+                title: 'Pinned Notes',
+                showSeeAll: false,
+              ),
+              const SizedBox(height: 12),
+              const NoteList(pinned: true),
+              const SizedBox(height: 24),
+              const RecentNotesRow(),
+              const SizedBox(height: 24),
+              TitleSection(
+                title: 'All Notes',
+                showSeeAll: false,
+              ),
+              const SizedBox(height: 12),
+              const NoteList(pinned: false),
+            ],
           ],
         ),
       ),

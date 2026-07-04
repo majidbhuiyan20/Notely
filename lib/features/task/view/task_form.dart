@@ -11,7 +11,12 @@ import '../widgets/priority_selector.dart';
 /// Shared form body used by both Create and Edit task screens. Keeps the
 /// layout, controllers, checklist state and Save button in a single place so
 /// the screens stay in sync visually.
-class TaskFormController {
+///
+/// The controller is a [ChangeNotifier] rather than a bare class with an
+/// `onChanged` callback so consumers can `addListener` (or use it as a
+/// Riverpod-like notifier) without each parent having to wire a
+/// `setState` lambda and risk mid-frame rebuilds.
+class TaskFormController extends ChangeNotifier {
   TaskFormController({
     String? title,
     String? description,
@@ -29,9 +34,13 @@ class TaskFormController {
         _checklist = List<ChecklistItemModel>.from(checklist ?? const []),
         _itemControllers = {},
         _itemFocusNodes = {} {
+    _title.addListener(notifyListeners);
+    _description.addListener(notifyListeners);
     for (final item in _checklist) {
-      _itemControllers[item.id] = TextEditingController(text: item.title);
+      final controller = TextEditingController(text: item.title);
+      _itemControllers[item.id] = controller;
       _itemFocusNodes[item.id] = _buildFocusNode();
+      controller.addListener(notifyListeners);
     }
   }
 
@@ -57,45 +66,42 @@ class TaskFormController {
   Map<String, FocusNode> get itemFocusNodes => _itemFocusNodes;
   String? get focusedItemId => _focusedItemId;
 
-  Function()? onChanged;
-
   FocusNode _buildFocusNode() {
     final node = FocusNode();
-    node.addListener(() {
-      if (onChanged == null) return;
-      if (!node.hasFocus) onChanged!.call();
-    });
+    node.addListener(notifyListeners);
     return node;
   }
 
   void setCategory(String value) {
     _category = value;
-    onChanged?.call();
+    notifyListeners();
   }
 
   void setPriority(NotePriority value) {
     _priority = value;
-    onChanged?.call();
+    notifyListeners();
   }
 
   void setDueDate(DateTime? value) {
     _dueDate = value;
     if (value == null) _dueTime = '';
-    onChanged?.call();
+    notifyListeners();
   }
 
   void setDueTime(String value) {
     _dueTime = value;
-    onChanged?.call();
+    notifyListeners();
   }
 
   void addItem() {
     final newId = DateTime.now().millisecondsSinceEpoch.toString();
     _checklist.add(ChecklistItemModel(id: newId, title: ''));
-    _itemControllers[newId] = TextEditingController();
+    final controller = TextEditingController();
+    _itemControllers[newId] = controller;
     _itemFocusNodes[newId] = _buildFocusNode();
+    controller.addListener(notifyListeners);
     _focusedItemId = newId;
-    onChanged?.call();
+    notifyListeners();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _itemFocusNodes[newId]?.requestFocus();
     });
@@ -103,17 +109,19 @@ class TaskFormController {
 
   void removeItem(String id) {
     _checklist.removeWhere((c) => c.id == id);
-    _itemControllers[id]?.dispose();
-    _itemFocusNodes[id]?.dispose();
-    _itemControllers.remove(id);
-    _itemFocusNodes.remove(id);
-    onChanged?.call();
+    final c = _itemControllers.remove(id);
+    c?.removeListener(notifyListeners);
+    c?.dispose();
+    final f = _itemFocusNodes.remove(id);
+    f?.removeListener(notifyListeners);
+    f?.dispose();
+    notifyListeners();
   }
 
   void toggleItem(String id) {
     final i = _checklist.indexWhere((c) => c.id == id);
     if (i != -1) _checklist[i].isChecked = !_checklist[i].isChecked;
-    onChanged?.call();
+    notifyListeners();
   }
 
   void onItemTextChanged(({String id, String text}) change) {
@@ -140,15 +148,19 @@ class TaskFormController {
     );
   }
 
+  @override
   void dispose() {
-    _title.dispose();
-    _description.dispose();
+    _title.removeListener(notifyListeners);
+    _description.removeListener(notifyListeners);
     for (final c in _itemControllers.values) {
+      c.removeListener(notifyListeners);
       c.dispose();
     }
     for (final f in _itemFocusNodes.values) {
+      f.removeListener(notifyListeners);
       f.dispose();
     }
+    super.dispose();
   }
 }
 
@@ -184,78 +196,110 @@ class TaskFormBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final accent = AppColors.royalBlue;
-    return SingleChildScrollView(
-      physics: const BouncingScrollPhysics(),
-      padding: padding,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _TitleCard(
-            controller: controller.titleController,
-            accent: accent,
-          ),
-          const SizedBox(height: 16),
-          EditFieldCard(
-            label: 'CATEGORY',
-            child: CategorySelector(
-              initialCategory: controller.category,
-              onCategorySelected: controller.setCategory,
+    // Listen to controller changes (text edits, category picks, checklist
+    // add/remove) so the body stays in sync without each parent wiring
+    // its own `setState` callback. The `_TaskFormBodyListener` does the
+    // actual rebuild — `build` itself stays pure.
+    return _TaskFormBodyListener(
+      controller: controller,
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        padding: padding,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _TitleCard(
+              controller: controller.titleController,
+              accent: accent,
             ),
-          ),
-          const SizedBox(height: 16),
-          EditFieldCard(
-            label: 'DESCRIPTION',
-            child: TextField(
-              controller: controller.descriptionController,
-              maxLines: 6,
-              minLines: 4,
-              style: const TextStyle(
-                fontSize: 15,
-                color: Color(0xFF1E1E1E),
-                height: 1.45,
-                fontWeight: FontWeight.w400,
+            const SizedBox(height: 16),
+            EditFieldCard(
+              label: 'CATEGORY',
+              child: CategorySelector(
+                initialCategory: controller.category,
+                onCategorySelected: controller.setCategory,
               ),
-              decoration: InputDecoration(
-                hintText: 'Write your thoughts...',
-                hintStyle: TextStyle(
-                  color: Colors.grey.shade400,
+            ),
+            const SizedBox(height: 16),
+            EditFieldCard(
+              label: 'DESCRIPTION',
+              child: TextField(
+                controller: controller.descriptionController,
+                maxLines: 6,
+                minLines: 4,
+                style: const TextStyle(
                   fontSize: 15,
+                  color: Color(0xFF1E1E1E),
+                  height: 1.45,
                   fontWeight: FontWeight.w400,
                 ),
-                border: InputBorder.none,
-                isCollapsed: true,
-                contentPadding: EdgeInsets.zero,
+                decoration: InputDecoration(
+                  hintText: 'Write your thoughts...',
+                  hintStyle: TextStyle(
+                    color: Colors.grey.shade400,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w400,
+                  ),
+                  border: InputBorder.none,
+                  isCollapsed: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 16),
-          EditFieldCard(
-            label: 'PRIORITY',
-            child: PrioritySelector(
-              initialPriority: controller.priority,
-              onPrioritySelected: controller.setPriority,
+            const SizedBox(height: 16),
+            EditFieldCard(
+              label: 'PRIORITY',
+              child: PrioritySelector(
+                initialPriority: controller.priority,
+                onPrioritySelected: controller.setPriority,
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-          _DueDateRow(
-            date: controller.dueDate,
-            time: controller.dueTime,
-            onDateChanged: controller.setDueDate,
-            onTimeChanged: controller.setDueTime,
-          ),
-          const SizedBox(height: 16),
-          ChecklistEditor(
-            checklist: controller.checklist,
-            controllers: controller.itemControllers,
-            focusNodes: controller.itemFocusNodes,
-            focusedItemId: controller.focusedItemId,
-            onToggle: controller.toggleItem,
-            onAdd: controller.addItem,
-            onRemove: controller.removeItem,
-            onTextChanged: controller.onItemTextChanged,
-          ),
-        ],
+            const SizedBox(height: 16),
+            _DueDateRow(
+              date: controller.dueDate,
+              time: controller.dueTime,
+              onDateChanged: controller.setDueDate,
+              onTimeChanged: controller.setDueTime,
+            ),
+            const SizedBox(height: 16),
+            ChecklistEditor(
+              checklist: controller.checklist,
+              controllers: controller.itemControllers,
+              focusNodes: controller.itemFocusNodes,
+              focusedItemId: controller.focusedItemId,
+              onToggle: controller.toggleItem,
+              onAdd: controller.addItem,
+              onRemove: controller.removeItem,
+              onTextChanged: controller.onItemTextChanged,
+            ),
+          ],
+        ),
       ),
+    );
+  }
+}
+
+/// Subscribes to a [TaskFormController] and rebuilds when it changes.
+/// Why this exists: controllers like [_TitleCard] and [CategorySelector]
+/// were previously driven by an `onChanged` callback that called
+/// `setState` on the parent — a pattern that races with Riverpod's
+/// provider-driven rebuild chain. Using a [Listenable] + [ListenableBuilder]
+/// keeps the rebuild scoped to this widget and avoids racing with parent
+/// rebuilds.
+class _TaskFormBodyListener extends StatelessWidget {
+  const _TaskFormBodyListener({
+    required this.controller,
+    required this.child,
+  });
+
+  final TaskFormController controller;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) => child,
     );
   }
 }

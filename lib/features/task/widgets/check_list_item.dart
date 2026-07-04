@@ -26,95 +26,123 @@ class ChecklistItem extends StatefulWidget {
   State<ChecklistItem> createState() => _ChecklistItemState();
 }
 
-class _ChecklistItemState extends State<ChecklistItem>
-    with SingleTickerProviderStateMixin {
-  bool _pressed = false;
+/// Local UI feedback only — the `_pressed` flag tracks whether the row
+/// is currently being held down so we can scale + tint it. This is a
+/// purely cosmetic concern; it never escapes the widget, so it doesn't
+/// need to live in a Riverpod provider.
+///
+/// We use a [ValueNotifier] here so the `setState` we previously called
+/// on every pointer-down / pointer-up doesn't trigger a full widget
+/// rebuild (which can race with the surrounding `tasksProvider` rebuild
+/// chain and produce `setState() or markNeedsBuild() called during build`).
+class _ChecklistItemState extends State<ChecklistItem> {
+  final ValueNotifier<bool> _pressed = ValueNotifier<bool>(false);
+
+  @override
+  void dispose() {
+    _pressed.dispose();
+    super.dispose();
+  }
+
+  void _setPressed(bool v) {
+    if (_pressed.value == v) return;
+    _pressed.value = v;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final bg = widget.isChecked
-        ? Colors.grey.withOpacity(0.06)
-        : (_pressed ? Colors.black.withOpacity(0.04) : Colors.white);
+    return ValueListenableBuilder<bool>(
+      valueListenable: _pressed,
+      builder: (context, pressed, _) {
+        final bg = widget.isChecked
+            ? Colors.grey.withOpacity(0.06)
+            : (pressed ? Colors.black.withOpacity(0.04) : Colors.white);
 
-    return AnimatedScale(
-      scale: _pressed ? 0.98 : 1.0,
-      duration: const Duration(milliseconds: 120),
-      curve: Curves.easeOut,
-      child: GestureDetector(
-        onTapDown: widget.isEditing
-            ? null
-            : (_) => setState(() => _pressed = true),
-        onTapUp: widget.isEditing
-            ? null
-            : (_) => setState(() => _pressed = false),
-        onTapCancel: widget.isEditing ? null : () => setState(() => _pressed = false),
-        onTap: widget.isEditing ? null : widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutCubic,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: bg,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: widget.isChecked
-                  ? Colors.transparent
-                  : Colors.black.withOpacity(0.06),
+        return AnimatedScale(
+          scale: pressed ? 0.98 : 1.0,
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOut,
+          child: GestureDetector(
+            onTapDown: widget.isEditing
+                ? null
+                : (_) => _setPressed(true),
+            onTapUp: widget.isEditing
+                ? null
+                : (_) => _setPressed(false),
+            onTapCancel:
+                widget.isEditing ? null : () => _setPressed(false),
+            onTap: widget.isEditing ? null : widget.onTap,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: bg,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: widget.isChecked
+                      ? Colors.transparent
+                      : Colors.black.withOpacity(0.06),
+                ),
+              ),
+              child: Row(
+                children: [
+                  _AnimatedCheckBox(
+                    isChecked: widget.isChecked,
+                    onTap: widget.isEditing ? null : widget.onTap,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: widget.isEditing
+                        ? TextField(
+                            controller: widget.controller,
+                            focusNode: widget.focusNode,
+                            onChanged: widget.onChanged,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w500,
+                              color: Color(0xFF1E1E1E),
+                            ),
+                            decoration: const InputDecoration(
+                              isDense: true,
+                              border: InputBorder.none,
+                              hintText: "List item",
+                              hintStyle: TextStyle(
+                                color: Colors.black38,
+                                fontWeight: FontWeight.w500,
+                                fontSize: 15,
+                              ),
+                              contentPadding:
+                                  EdgeInsets.symmetric(vertical: 4),
+                            ),
+                          )
+                        : AnimatedDefaultTextStyle(
+                            duration: const Duration(milliseconds: 200),
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: widget.isChecked
+                                  ? FontWeight.w400
+                                  : FontWeight.w500,
+                              decoration: widget.isChecked
+                                  ? TextDecoration.lineThrough
+                                  : TextDecoration.none,
+                              decorationColor: Colors.grey.shade400,
+                              color: widget.isChecked
+                                  ? Colors.grey.shade500
+                                  : const Color(0xFF1E1E1E),
+                            ),
+                            child: Text(widget.title),
+                          ),
+                  ),
+                  if (widget.isEditing && widget.onDelete != null)
+                    _DeleteButton(onTap: widget.onDelete!),
+                ],
+              ),
             ),
           ),
-          child: Row(
-            children: [
-              _AnimatedCheckBox(
-                isChecked: widget.isChecked,
-                onTap: widget.isEditing ? null : widget.onTap,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: widget.isEditing
-                    ? TextField(
-                        controller: widget.controller,
-                        focusNode: widget.focusNode,
-                        onChanged: widget.onChanged,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w500,
-                          color: Color(0xFF1E1E1E),
-                        ),
-                        decoration: const InputDecoration(
-                          isDense: true,
-                          border: InputBorder.none,
-                          hintText: "List item",
-                          hintStyle: TextStyle(
-                            color: Colors.black38,
-                            fontWeight: FontWeight.w500,
-                            fontSize: 15,
-                          ),
-                          contentPadding: EdgeInsets.symmetric(vertical: 4),
-                        ),
-                      )
-                    : AnimatedDefaultTextStyle(
-                        duration: const Duration(milliseconds: 200),
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight:
-                              widget.isChecked ? FontWeight.w400 : FontWeight.w500,
-                          decoration: widget.isChecked
-                              ? TextDecoration.lineThrough
-                              : TextDecoration.none,
-                          decorationColor: Colors.grey.shade400,
-                          color: widget.isChecked
-                              ? Colors.grey.shade500
-                              : const Color(0xFF1E1E1E),
-                        ),
-                        child: Text(widget.title),
-                      ),
-              ),
-              if (widget.isEditing && widget.onDelete != null)
-                _DeleteButton(onTap: widget.onDelete!),
-            ],
-          ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

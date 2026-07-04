@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import '../../../core/route/app_route.dart';
 import '../../authentication/presentation/providers/auth_providers.dart';
 
 /// First screen a new user sees after the splash. Once they tap "Get
 /// Started" we mark onboarding as completed (so it won't show again) and
 /// navigate to the Login screen.
+///
+/// [_busy] is a local UI-only flag (spinner vs button label) — we keep
+/// it in a [ValueNotifier] rather than calling `setState` so toggling
+/// it doesn't trigger a full widget rebuild and can't race with parent
+/// rebuilds.
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
 
@@ -15,11 +19,17 @@ class OnboardingScreen extends ConsumerStatefulWidget {
 }
 
 class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
-  bool _busy = false;
+  final ValueNotifier<bool> _busy = ValueNotifier<bool>(false);
+
+  @override
+  void dispose() {
+    _busy.dispose();
+    super.dispose();
+  }
 
   Future<void> _onGetStarted() async {
-    if (_busy) return;
-    setState(() => _busy = true);
+    if (_busy.value) return;
+    _busy.value = true;
     try {
       await ref.read(authRepositoryProvider).markOnboardingComplete();
       if (!mounted) return;
@@ -31,7 +41,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         (route) => route.isFirst,
       );
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) _busy.value = false;
     }
   }
 
@@ -71,30 +81,35 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 ),
               ),
               const Spacer(),
-              ElevatedButton(
-                onPressed: _busy ? null : _onGetStarted,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFD9E9FF),
-                  foregroundColor: Colors.blue,
-                  minimumSize: const Size(double.infinity, 56),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  elevation: 0,
-                ),
-                child: _busy
-                    ? const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(strokeWidth: 2.5),
-                      )
-                    : const Text(
-                        'GET STARTED',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.2,
-                        ),
+              ValueListenableBuilder<bool>(
+                valueListenable: _busy,
+                builder: (context, busy, _) {
+                  return ElevatedButton(
+                    onPressed: busy ? null : _onGetStarted,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFD9E9FF),
+                      foregroundColor: Colors.blue,
+                      minimumSize: const Size(double.infinity, 56),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
+                      elevation: 0,
+                    ),
+                    child: busy
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(strokeWidth: 2.5),
+                          )
+                        : const Text(
+                            'GET STARTED',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                  );
+                },
               ),
               const SizedBox(height: 24),
             ],

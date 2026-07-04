@@ -13,6 +13,9 @@ import 'task_form.dart';
 /// (title, category, description, checklist) so the two experiences
 /// feel consistent. On Save the new note is persisted to sqflite (and
 /// pushed to Firestore in the background) via [TasksNotifier].
+///
+/// Uses a [ValueNotifier] for the spinner-vs-button-label toggle instead
+/// of `setState` so toggling it doesn't trigger a full widget rebuild.
 class CreateTaskScreen extends ConsumerStatefulWidget {
   const CreateTaskScreen({super.key, this.initialCategory});
 
@@ -26,7 +29,7 @@ class CreateTaskScreen extends ConsumerStatefulWidget {
 
 class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
   late final TaskFormController _form;
-  bool _busy = false;
+  final ValueNotifier<bool> _busy = ValueNotifier<bool>(false);
 
   @override
   void initState() {
@@ -34,19 +37,17 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
     _form = TaskFormController(
       category: widget.initialCategory ?? 'Personal',
     );
-    _form.onChanged = () {
-      if (mounted) setState(() {});
-    };
   }
 
   @override
   void dispose() {
     _form.dispose();
+    _busy.dispose();
     super.dispose();
   }
 
   Future<void> _save() async {
-    if (_busy) return;
+    if (_busy.value) return;
     final snap = _form.snapshot();
     if (snap.title.isEmpty && snap.checklist.isEmpty) {
       AppSnackbar.error(
@@ -73,7 +74,7 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
       checklist: snap.checklist,
     );
 
-    setState(() => _busy = true);
+    _busy.value = true;
     try {
       await ref.read(tasksProvider.notifier).upsert(note);
       if (!mounted) return;
@@ -83,7 +84,7 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
       if (!mounted) return;
       AppSnackbar.error(context, e.toString());
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) _busy.value = false;
     }
   }
 
@@ -112,22 +113,27 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
       appBar: NotelyAppBar(
         title: 'New Note',
         actions: [
-          TextButton(
-            onPressed: _busy ? null : _save,
-            style: TextButton.styleFrom(foregroundColor: accent),
-            child: _busy
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2.5),
-                  )
-                : const Text(
-                    'Save',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+          ValueListenableBuilder<bool>(
+            valueListenable: _busy,
+            builder: (context, busy, _) {
+              return TextButton(
+                onPressed: busy ? null : _save,
+                style: TextButton.styleFrom(foregroundColor: accent),
+                child: busy
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2.5),
+                      )
+                    : const Text(
+                        'Save',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+              );
+            },
           ),
           const SizedBox(width: 8),
         ],
@@ -137,12 +143,17 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
           Expanded(
             child: TaskFormBody(controller: _form),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-            child: TaskFormSaveButton(
-              label: _busy ? 'SAVING…' : 'CREATE NOTE',
-              onPressed: _busy ? null : _save,
-            ),
+          ValueListenableBuilder<bool>(
+            valueListenable: _busy,
+            builder: (context, busy, _) {
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                child: TaskFormSaveButton(
+                  label: busy ? 'SAVING…' : 'CREATE NOTE',
+                  onPressed: busy ? null : _save,
+                ),
+              );
+            },
           ),
         ],
       ),

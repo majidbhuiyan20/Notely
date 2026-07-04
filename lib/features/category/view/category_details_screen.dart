@@ -1,96 +1,95 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/route/app_route.dart';
 import '../../task/model/note_data.dart';
 import '../../task/model/notes_repository.dart';
+import '../../task/providers/notes_providers.dart';
+import '../../task/providers/search_providers.dart';
 import '../../widgets/back_button.dart';
 import '../../widgets/empty_state.dart';
+import '../../widgets/search_field.dart';
+import '../providers/category_view_providers.dart';
 import '../widgets/category_filter_tabs.dart';
 import '../widgets/category_header.dart';
 import '../widgets/category_progress_bar.dart';
 import '../widgets/note_list_tile.dart';
 
-class CategoryDetailsScreen extends StatefulWidget {
+/// Category details screen — fully Riverpod. No `setState`, no manual
+/// `ChangeNotifier` listener — the [notesListProvider] stream drives
+/// every rebuild, and local UI selections (filter tab, search, sort
+/// order) live in dedicated [StateProvider]s.
+class CategoryDetailsScreen extends ConsumerWidget {
   const CategoryDetailsScreen({super.key, required this.categoryName});
   final String categoryName;
 
-  @override
-  State<CategoryDetailsScreen> createState() => _CategoryDetailsScreenState();
-}
-
-class _CategoryDetailsScreenState extends State<CategoryDetailsScreen> {
-  CategoryFilter _filter = CategoryFilter.all;
-  bool _sortByPriority = true;
-  String _search = '';
-  late final NotesRepository _repo;
-
-  @override
-  void initState() {
-    super.initState();
-    _repo = NotesRepository.instance;
-    _repo.addListener(_onRepoChanged);
-  }
-
-  @override
-  void dispose() {
-    _repo.removeListener(_onRepoChanged);
-    super.dispose();
-  }
-
-  void _onRepoChanged() {
-    if (mounted) setState(() {});
-  }
-
-  /// Returns the metadata for the current category: total / completed /
-  /// progress / accent color.
-  _CategoryStats _statsFor() {
-    final meta = _repo.categoryMeta(widget.categoryName);
-    final total = _repo.totalFor(widget.categoryName);
-    final completed = _repo.completedFor(widget.categoryName);
+  _CategoryStats _statsFor(List<NoteData> notes) {
+    final meta = NotesRepository.instance.categoryMeta(categoryName);
+    final total = notes.where((n) => n.category == categoryName).length;
+    final completed = notes
+        .where((n) =>
+            n.category == categoryName &&
+            n.status == NoteStatus.completed)
+        .length;
     return _CategoryStats(
       color: meta.color,
       icon: meta.icon,
       total: total,
       completed: completed,
-      progress: _repo.progressFor(widget.categoryName),
+      progress: total == 0 ? 0.0 : completed / total,
     );
   }
 
-  List<NoteData> _filteredAndSorted() {
-    Iterable<NoteData> source = _repo.notesByCategory(widget.categoryName);
+  List<NoteData> _filteredAndSorted(
+    List<NoteData> source,
+    CategoryFilter filter,
+    bool sortByPriority,
+  ) {
+    Iterable<NoteData> s = source.where((n) => n.category == categoryName);
 
-    switch (_filter) {
+    switch (filter) {
       case CategoryFilter.all:
         break;
       case CategoryFilter.pending:
-        source = source.where((n) => n.status == NoteStatus.pending);
+        s = s.where((n) => n.status == NoteStatus.pending);
         break;
       case CategoryFilter.completed:
-        source = source.where((n) => n.status == NoteStatus.completed);
+        s = s.where((n) => n.status == NoteStatus.completed);
         break;
     }
 
-    if (_search.trim().isNotEmpty) {
-      final q = _search.toLowerCase();
-      source = source.where((n) =>
-          n.title.toLowerCase().contains(q) ||
-          n.description.toLowerCase().contains(q));
-    }
-
-    final list = source.toList();
-    if (_sortByPriority) {
+    final list = s.toList();
+    if (sortByPriority) {
       list.sort((a, b) => comparePriority(a.priority, b.priority));
     }
     return list;
   }
 
   @override
-  Widget build(BuildContext context) {
-    final stats = _statsFor();
-    final list = _filteredAndSorted();
-    final pendingCount =
-        _repo.pendingFor(widget.categoryName);
-    final completedCount =
-        _repo.completedFor(widget.categoryName);
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Subscribe to the live list — every push / delete from anywhere in
+    // the app shows up here automatically.
+    final notes = ref.watch(notesListProvider);
+    // Subscribe to filtered list for search-driven highlighting. The
+    // `_SearchField` widget itself owns the text controller + provider.
+    ref.watch(searchQueryProvider);
+
+    final stats = _statsFor(notes);
+    final filter = ref.watch(categoryFilterProvider);
+    final sortByPriority = ref.watch(categorySortByPriorityProvider);
+
+    final list = _filteredAndSorted(notes, filter, sortByPriority);
+    final hasQuery =
+        ref.watch(searchQueryProvider.select((s) => s.trim().isNotEmpty));
+    final pendingCount = notes
+        .where((n) =>
+            n.category == categoryName &&
+            n.status == NoteStatus.pending)
+        .length;
+    final completedCount = notes
+        .where((n) =>
+            n.category == categoryName &&
+            n.status == NoteStatus.completed)
+        .length;
     final total = stats.total;
 
     return Scaffold(
@@ -98,7 +97,7 @@ class _CategoryDetailsScreenState extends State<CategoryDetailsScreen> {
       appBar: const NotelyAppBar(title: 'Category Details'),
       floatingActionButton: _CreateTaskFab(
         color: stats.color,
-        categoryName: widget.categoryName,
+        categoryName: categoryName,
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       body: ListView(
@@ -106,7 +105,7 @@ class _CategoryDetailsScreenState extends State<CategoryDetailsScreen> {
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
           CategoryHeader(
-            title: widget.categoryName,
+            title: categoryName,
             totalCount: total,
             completedCount: completedCount,
             progress: stats.progress,
@@ -121,34 +120,38 @@ class _CategoryDetailsScreenState extends State<CategoryDetailsScreen> {
           ),
           const SizedBox(height: 16),
           CategoryFilterTabs(
-            active: _filter,
-            onChanged: (f) => setState(() => _filter = f),
+            active: filter,
+            onChanged: (f) =>
+                ref.read(categoryFilterProvider.notifier).set(f),
             allCount: total,
             pendingCount: pendingCount,
             completedCount: completedCount,
             color: stats.color,
           ),
           const SizedBox(height: 12),
-          _SearchField(
-            value: _search,
-            color: stats.color,
-            onChanged: (v) => setState(() => _search = v),
-          ),
+          const SearchField(hintText: 'Search this category…'),
           const SizedBox(height: 12),
           _SortRow(
-            sortByPriority: _sortByPriority,
+            sortByPriority: sortByPriority,
             count: list.length,
-            onToggle: () =>
-                setState(() => _sortByPriority = !_sortByPriority),
+            onToggle: () => ref
+                .read(categorySortByPriorityProvider.notifier)
+                .toggle(),
           ),
           const SizedBox(height: 8),
           if (list.isEmpty)
             EmptyState(
-              icon: Icons.inbox_outlined,
-              title: 'No ${_filter.label.toLowerCase()} tasks',
-              subtitle: _filter == CategoryFilter.all
-                  ? 'You haven\'t created any notes in this category yet.'
-                  : 'Switch tabs to see your tasks.',
+              icon: hasQuery
+                  ? Icons.search_off_rounded
+                  : Icons.inbox_outlined,
+              title: hasQuery
+                  ? 'No matching ${filter.label.toLowerCase()} tasks'
+                  : 'No ${filter.label.toLowerCase()} tasks',
+              subtitle: hasQuery
+                  ? 'Try a different search term or switch tabs.'
+                  : (filter == CategoryFilter.all
+                      ? 'You haven\'t created any notes in this category yet.'
+                      : 'Switch tabs to see your tasks.'),
               color: stats.color,
             )
           else
@@ -268,7 +271,7 @@ class _SortRow extends StatelessWidget {
 /// category details screen. Tapping it opens the Create Task screen with
 /// the current category preselected so the new note lands in the right
 /// place. "All Notes" is a virtual aggregate category and falls back to
-/// "Personal" when creating.
+/// no preselection when creating.
 class _CreateTaskFab extends StatelessWidget {
   const _CreateTaskFab({
     required this.color,
@@ -304,62 +307,14 @@ class _CreateTaskFab extends StatelessWidget {
           ),
         ),
         onPressed: () {
-          final initial = categoryName == 'All Notes' ? null : categoryName;
+          final initial =
+              categoryName == 'All Notes' ? null : categoryName;
           Navigator.pushNamed(
             context,
             Routes.createTaskRoute,
             arguments: initial,
           );
         },
-      ),
-    );
-  }
-}
-
-class _SearchField extends StatelessWidget {
-  const _SearchField({
-    required this.value,
-    required this.color,
-    required this.onChanged,
-  });
-
-  final String value;
-  final Color color;
-  final ValueChanged<String> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: TextField(
-        onChanged: onChanged,
-        decoration: InputDecoration(
-          hintText: 'Search this category…',
-          hintStyle: TextStyle(
-            color: Colors.grey.shade500,
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-          ),
-          prefixIcon: Icon(Icons.search_rounded, color: color, size: 22),
-          suffixIcon: value.isEmpty
-              ? null
-              : IconButton(
-                  icon: const Icon(Icons.close_rounded, size: 18),
-                  onPressed: () => onChanged(''),
-                ),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(vertical: 14),
-        ),
       ),
     );
   }

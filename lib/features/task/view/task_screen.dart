@@ -15,6 +15,12 @@ import '../widgets/task_meta_section.dart';
 /// Read-only detail view of a single note. Reads from the live
 /// [tasksProvider] so any edit made in [EditTaskScreen] is reflected
 /// here automatically. Offers Edit and Delete actions in the app bar.
+///
+/// Checklist toggles mutate the in-memory `note.checklist` then call
+/// [TasksNotifier.upsert]; the resulting provider rebuild is what
+/// updates the UI. We don't `setState` here — that previously raced
+/// with the Riverpod rebuild chain and produced `setState() or
+/// markNeedsBuild() called during build`.
 class TaskScreen extends ConsumerStatefulWidget {
   const TaskScreen({super.key, this.noteId});
   final String? noteId;
@@ -24,9 +30,7 @@ class TaskScreen extends ConsumerStatefulWidget {
 }
 
 class _TaskScreenState extends ConsumerState<TaskScreen> {
-  // Local-only state for optimistic checklist toggles. We don't roundtrip
-  // through sqflite on every tap because that would be jarring; the
-  // changes are persisted on a debounced timer below.
+  /// Local-only debounce flag — see [_persistChecklistChange].
   bool _savingChecklist = false;
 
   NoteData? _resolve(List<NoteData> notes) {
@@ -40,7 +44,8 @@ class _TaskScreenState extends ConsumerState<TaskScreen> {
 
   Future<void> _toggleChecklist(NoteData note, int index) async {
     note.checklist[index].isChecked = !note.checklist[index].isChecked;
-    setState(() {});
+    // No `setState` — the upsert below re-emits the tasks list and
+    // Riverpod rebuilds this screen with the new state.
     await _persistChecklistChange(note);
   }
 
@@ -49,7 +54,6 @@ class _TaskScreenState extends ConsumerState<TaskScreen> {
       c.isChecked = true;
     }
     note.status = NoteStatus.completed;
-    setState(() {});
     await ref.read(tasksProvider.notifier).upsert(note);
     if (!mounted) return;
     AppSnackbar.success(context, 'Marked all checklist items done');

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/route/app_route.dart';
 import '../../analytics/view/analytics_screen.dart';
@@ -7,17 +8,23 @@ import '../../calendar/presentation/view/calendar_screen.dart';
 import '../../home/view/home_screen.dart';
 import '../../profile/view/profile_screen.dart';
 
-/// 4-tab bottom nav with a centered floating + button. Uses Material 3
-/// [NavigationBar] so the highlight + animation are platform-correct.
-class MainScreen extends StatefulWidget {
-  const MainScreen({super.key});
-
+/// Tracks which tab in the bottom nav is currently active. Uses
+/// Riverpod 3.x [Notifier] — `StateProvider` isn't exported by
+/// `flutter_riverpod` 3.3.
+class SelectedTabNotifier extends Notifier<int> {
   @override
-  State<MainScreen> createState() => _MainScreenState();
+  int build() => 0;
+
+  void set(int value) => state = value;
 }
 
-class _MainScreenState extends State<MainScreen> {
-  int _selectedIndex = 0;
+final selectedTabProvider =
+    NotifierProvider<SelectedTabNotifier, int>(SelectedTabNotifier.new);
+
+/// 4-tab bottom nav with a centered floating + button. Uses Material 3
+/// [NavigationBar] so the highlight + animation are platform-correct.
+class MainScreen extends ConsumerWidget {
+  const MainScreen({super.key});
 
   static const _destinations = <_Destination>[
     _Destination(
@@ -49,21 +56,23 @@ class _MainScreenState extends State<MainScreen> {
     ProfileScreen(),
   ];
 
-  void _onItemTapped(int index) {
-    if (_selectedIndex == index) return;
+  void _onItemTapped(WidgetRef ref, int index) {
+    final current = ref.read(selectedTabProvider);
+    if (current == index) return;
     HapticFeedback.lightImpact();
-    setState(() => _selectedIndex = index);
+    ref.read(selectedTabProvider.notifier).set(index);
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final selectedIndex = ref.watch(selectedTabProvider);
     return Scaffold(
       extendBody: true,
       body: IndexedStack(
-        index: _selectedIndex,
+        index: selectedIndex,
         children: _screens,
       ),
-      floatingActionButton: _CreateFab(),
+      floatingActionButton: const _CreateFab(),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
@@ -89,8 +98,8 @@ class _MainScreenState extends State<MainScreen> {
                 if (i == 2) const SizedBox(width: 72),
                 _NavItem(
                   destination: _destinations[i],
-                  isActive: _selectedIndex == i,
-                  onTap: () => _onItemTapped(i),
+                  isActive: selectedIndex == i,
+                  onTap: () => _onItemTapped(ref, i),
                 ),
               ],
             ],
@@ -171,6 +180,7 @@ class _NavItem extends StatelessWidget {
 }
 
 class _CreateFab extends StatelessWidget {
+  const _CreateFab();
   @override
   Widget build(BuildContext context) {
     return Container(

@@ -2,28 +2,18 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../category/model/category_model.dart';
 
-class CategorySelector extends StatefulWidget {
-  final String initialCategory;
-  final Function(String) onCategorySelected;
-
+/// Horizontal pill row used in the create / edit task form. Stateless:
+/// the selected category is owned entirely by the parent's
+/// [TaskFormController] and bubbled back up via [onCategorySelected].
+class CategorySelector extends StatelessWidget {
   const CategorySelector({
     super.key,
     required this.initialCategory,
     required this.onCategorySelected,
   });
 
-  @override
-  State<CategorySelector> createState() => _CategorySelectorState();
-}
-
-class _CategorySelectorState extends State<CategorySelector> {
-  late String _selectedCategory;
-
-  @override
-  void initState() {
-    super.initState();
-    _selectedCategory = widget.initialCategory;
-  }
+  final String initialCategory;
+  final ValueChanged<String> onCategorySelected;
 
   @override
   Widget build(BuildContext context) {
@@ -48,22 +38,21 @@ class _CategorySelectorState extends State<CategorySelector> {
             separatorBuilder: (context, index) => const SizedBox(width: 12),
             itemBuilder: (context, index) {
               final category = CategoryModel.all[index];
-              final isSelected = _selectedCategory == category.title;
+              final isSelected = initialCategory == category.title;
               return GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _selectedCategory = category.title;
-                  });
-                  widget.onCategorySelected(category.title);
-                },
+                onTap: () => onCategorySelected(category.title),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 300),
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   decoration: BoxDecoration(
-                    color: isSelected ? AppColors.royalBlue : const Color(0xFFF8FAFC),
+                    color: isSelected
+                        ? AppColors.royalBlue
+                        : const Color(0xFFF8FAFC),
                     borderRadius: BorderRadius.circular(25),
                     border: Border.all(
-                      color: isSelected ? AppColors.royalBlue : Colors.grey.shade200,
+                      color: isSelected
+                          ? AppColors.royalBlue
+                          : Colors.grey.shade200,
                     ),
                     boxShadow: isSelected
                         ? [
@@ -79,7 +68,9 @@ class _CategorySelectorState extends State<CategorySelector> {
                     child: Text(
                       category.title,
                       style: TextStyle(
-                        color: isSelected ? Colors.white : Colors.grey.shade600,
+                        color: isSelected
+                            ? Colors.white
+                            : Colors.grey.shade600,
                         fontWeight: FontWeight.w600,
                         fontSize: 14,
                       ),
