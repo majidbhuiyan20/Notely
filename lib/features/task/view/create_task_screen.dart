@@ -72,10 +72,29 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
       categoryIcon: meta.icon,
       status: NoteStatus.pending,
       priority: snap.priority,
+      dueDate: _dueDateDisplay(snap.dueDate),
+      dueDateIso: snap.dueDate == null ? null : _iso(snap.dueDate!),
       checklist: snap.checklist,
     );
     _repo.addNote(note);
     Navigator.pop(context, note);
+  }
+
+  /// Cheap human-readable label for the task details screen's "Due Date"
+  /// row. Calendar feature reads [NoteData.dueDateIso] separately.
+  String _dueDateDisplay(DateTime? d) {
+    if (d == null) return '';
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${months[d.month - 1]} ${d.day}, ${d.year}';
+  }
+
+  String _iso(DateTime d) {
+    final m = d.month.toString().padLeft(2, '0');
+    final day = d.day.toString().padLeft(2, '0');
+    return '${d.year}-$m-$day';
   }
 
   @override

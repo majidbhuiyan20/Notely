@@ -5,31 +5,38 @@ enum NoteStatus { pending, completed }
 enum NotePriority { high, medium, low }
 
 class ChecklistItemModel {
-  String id;
-  String title;
-  bool isChecked;
-
   ChecklistItemModel({
     required this.id,
     required this.title,
     this.isChecked = false,
   });
+
+  final String id;
+  String title;
+  bool isChecked;
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'title': title,
+        'isChecked': isChecked,
+      };
+
+  factory ChecklistItemModel.fromJson(Map<String, dynamic> json) {
+    return ChecklistItemModel(
+      id: (json['id'] as String?) ?? '',
+      title: (json['title'] as String?) ?? '',
+      isChecked: (json['isChecked'] as bool?) ?? false,
+    );
+  }
+
+  ChecklistItemModel copy() => ChecklistItemModel(
+        id: id,
+        title: title,
+        isChecked: isChecked,
+      );
 }
 
 class NoteData {
-  final String id;
-  String title;
-  String description;
-  String category;
-  Color categoryColor;
-  IconData categoryIcon;
-  NoteStatus status;
-  NotePriority priority;
-  String dueDate;
-  String assignee;
-  String reminder;
-  final List<ChecklistItemModel> checklist;
-
   NoteData({
     required this.id,
     required this.title,
@@ -42,8 +49,28 @@ class NoteData {
     this.dueDate = '',
     this.assignee = '',
     this.reminder = '',
+    this.dueDateIso,
     List<ChecklistItemModel>? checklist,
   }) : checklist = checklist ?? [];
+
+  final String id;
+  String title;
+  String description;
+  String category;
+  Color categoryColor;
+  IconData categoryIcon;
+  NoteStatus status;
+  NotePriority priority;
+  String dueDate;
+  String assignee;
+  String reminder;
+
+  /// ISO-8601 date (yyyy-MM-dd) used by the calendar feature to key notes
+  /// by the day they're due. `null` when no due date is set; the existing
+  /// free-form [dueDate] string is preserved for display.
+  String? dueDateIso;
+
+  final List<ChecklistItemModel> checklist;
 
   int get completedChecklist =>
       checklist.where((c) => c.isChecked).length;
@@ -63,9 +90,8 @@ class NoteData {
         dueDate: dueDate,
         assignee: assignee,
         reminder: reminder,
-        checklist: checklist
-            .map((c) => ChecklistItemModel(
-                id: c.id, title: c.title, isChecked: c.isChecked))
-            .toList(),
+        dueDateIso: dueDateIso,
+        checklist:
+            checklist.map((c) => c.copy()).toList(growable: false),
       );
 }

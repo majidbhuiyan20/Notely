@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:notely/features/authentication/presentation/view/login_screen.dart';
 import 'package:notely/features/category/view/category_details_screen.dart';
 import 'package:notely/features/category/view/category_screen.dart';
 import 'package:notely/features/task/view/create_task_screen.dart';
@@ -13,7 +14,7 @@ class Routes {
   static const String splashRoute = "/";
   static const String onboardingRoute = "/onboarding";
   static const String mainRoute = "/main";
-  static const String loginRoute = "/loginScreen";
+  static const String loginRoute = "/login";
   static const String categoryRoute = "/category";
   static const String categoryDetailsRoute = "/categoryDetails";
   static const String taskRoute = "/task";
@@ -26,6 +27,8 @@ class RouteGenerator {
     switch (routeSettings.name) {
       case Routes.splashRoute:
         return MaterialPageRoute(builder: (_) => const SplashScreen());
+      case Routes.loginRoute:
+        return MaterialPageRoute(builder: (_) => const LoginScreen());
       case Routes.onboardingRoute:
         return MaterialPageRoute(builder: (_) => const OnboardingScreen());
       case Routes.mainRoute:

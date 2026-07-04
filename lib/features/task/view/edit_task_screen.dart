@@ -35,6 +35,9 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
         description: _note!.description,
         category: _note!.category,
         priority: _note!.priority,
+        dueDate: _note!.dueDateIso == null
+            ? null
+            : _parseIso(_note!.dueDateIso!),
         checklist: _note!.checklist,
       );
       _form!.onChanged = () {
@@ -67,6 +70,9 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
     note.description = snap.description;
     note.category = snap.category;
     note.priority = snap.priority;
+    note.dueDateIso =
+        snap.dueDate == null ? null : _iso(snap.dueDate!);
+    note.dueDate = snap.dueDate == null ? '' : _dueDateDisplay(snap.dueDate!);
     note.checklist
       ..clear()
       ..addAll(snap.checklist);
@@ -149,5 +155,33 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
         ],
       ),
     );
+  }
+
+  String _dueDateDisplay(DateTime d) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${months[d.month - 1]} ${d.day}, ${d.year}';
+  }
+
+  String _iso(DateTime d) {
+    final m = d.month.toString().padLeft(2, '0');
+    final day = d.day.toString().padLeft(2, '0');
+    return '${d.year}-$m-$day';
+  }
+
+  DateTime? _parseIso(String iso) {
+    try {
+      final parts = iso.split('-');
+      if (parts.length != 3) return null;
+      return DateTime(
+        int.parse(parts[0]),
+        int.parse(parts[1]),
+        int.parse(parts[2]),
+      );
+    } catch (_) {
+      return null;
+    }
   }
 }

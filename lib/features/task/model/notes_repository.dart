@@ -45,6 +45,11 @@ class NotesRepository {
           String category, NoteStatus status) =>
       _notes.where((n) => n.category == category && n.status == status);
 
+  /// Returns notes whose [NoteData.dueDateIso] matches the supplied ISO
+  /// date (yyyy-MM-dd). Used by the calendar feature.
+  Iterable<NoteData> notesOnDate(String isoDate) =>
+      _notes.where((n) => n.dueDateIso == isoDate);
+
   int totalFor(String category) => notesByCategory(category).length;
   int completedFor(String category) =>
       notesByCategoryAndStatus(category, NoteStatus.completed).length;
@@ -415,8 +420,77 @@ class NotesRepository {
         assignee: 'Me',
         reminder: 'None',
       ),
+
+      // Dated samples used by the calendar feature. The dates are picked
+      // relative to "today" at app start – see [_today].
+      NoteData(
+        id: 'n19',
+        title: 'Doctor Appointment',
+        description: 'Annual physical checkup and blood work.',
+        category: 'Health',
+        categoryColor: AppColors.red,
+        categoryIcon: Icons.favorite_border,
+        status: NoteStatus.pending,
+        priority: NotePriority.high,
+        dueDate: 'Today',
+        dueDateIso: _todayIso(),
+        assignee: 'Dr. Lee',
+        reminder: '1 Hour Before',
+      ),
+      NoteData(
+        id: 'n20',
+        title: 'Project Sync',
+        description: 'Weekly project status sync with the design team.',
+        category: 'Work',
+        categoryColor: AppColors.orange,
+        categoryIcon: Icons.work_outline,
+        status: NoteStatus.pending,
+        priority: NotePriority.medium,
+        dueDate: 'Today',
+        dueDateIso: _todayIso(),
+        assignee: 'Team',
+        reminder: '15 Min Before',
+      ),
+      NoteData(
+        id: 'n21',
+        title: 'Yoga Class',
+        description: 'Evening yoga session at the studio.',
+        category: 'Health',
+        categoryColor: AppColors.red,
+        categoryIcon: Icons.favorite_border,
+        status: NoteStatus.pending,
+        priority: NotePriority.low,
+        dueDate: 'Tomorrow',
+        dueDateIso: _todayIso(addDays: 1),
+        assignee: 'Me',
+        reminder: 'Morning Of',
+      ),
+      NoteData(
+        id: 'n22',
+        title: 'Pick Up Dry Cleaning',
+        description: 'Drop off and pick up suits from the dry cleaner.',
+        category: 'Shopping',
+        categoryColor: AppColors.pink,
+        categoryIcon: Icons.shopping_cart_outlined,
+        status: NoteStatus.pending,
+        priority: NotePriority.low,
+        dueDate: 'In 2 days',
+        dueDateIso: _todayIso(addDays: 2),
+        assignee: 'Me',
+        reminder: 'None',
+      ),
     ]);
   }
+}
+
+/// Returns the local-date ISO string for [addDays] days from today.
+String _todayIso({int addDays = 0}) {
+  final now = DateTime.now();
+  final d = DateTime(now.year, now.month, now.day).add(Duration(days: addDays));
+  final y = d.year.toString().padLeft(4, '0');
+  final m = d.month.toString().padLeft(2, '0');
+  final day = d.day.toString().padLeft(2, '0');
+  return '$y-$m-$day';
 }
 
 /// Convenience: priority sort comparator — High → Medium → Low.

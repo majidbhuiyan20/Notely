@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/route/app_route.dart';
+import '../../calendar/presentation/view/calendar_screen.dart';
 import '../../home/view/home_screen.dart';
 import '../../profile/view/profile_screen.dart';
 
@@ -31,9 +32,10 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     super.dispose();
   }
 
-  final List<Widget> _screens = [
-    const HomeScreen(),
-    const ProfileScreen(),
+  final List<Widget> _screens = const [
+    HomeScreen(),
+    CalendarScreen(),
+    ProfileScreen(),
   ];
 
   void _onItemTapped(int index) {
@@ -91,8 +93,17 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
             _buildNavItem(Icons.home_rounded, Icons.home_outlined, 0),
+            _buildNavItem(
+              Icons.calendar_month_rounded,
+              Icons.calendar_month_outlined,
+              1,
+            ),
             const SizedBox(width: 50), // Gap for FAB
-            _buildNavItem(Icons.person_rounded, Icons.person_outline_rounded, 1),
+            // Right side of the FAB: only one slot remains for Profile,
+            // but with 3 items + 1 spacer we use spaceAround to keep things
+            // symmetric, so we add an empty leader here.
+            const SizedBox(width: 36),
+            _buildNavItem(Icons.person_rounded, Icons.person_outline_rounded, 2),
           ],
         ),
       ),

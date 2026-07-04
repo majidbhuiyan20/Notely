@@ -1,13 +1,40 @@
 import 'package:flutter/material.dart';
-import '../view/onboarding_screen.dart'; // This import seems wrong in the previous version, it was importing itself or HomeScreen.
-import '../../main/view/main_screen.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class OnboardingScreen extends StatelessWidget {
+import '../../../core/route/app_route.dart';
+import '../../authentication/presentation/providers/auth_providers.dart';
+
+/// First screen a new user sees after the splash. Once they tap "Get
+/// Started" we mark onboarding as completed (so it won't show again) and
+/// navigate to the Login screen.
+class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
+
+  @override
+  ConsumerState<OnboardingScreen> createState() => _OnboardingScreenState();
+}
+
+class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
+  bool _busy = false;
+
+  Future<void> _onGetStarted() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(authRepositoryProvider)
+          .markOnboardingComplete();
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(context, Routes.loginRoute);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24.0),
@@ -41,12 +68,7 @@ class OnboardingScreen extends StatelessWidget {
               ),
               const Spacer(),
               ElevatedButton(
-                onPressed: () {
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (_) => const MainScreen()),
-                  );
-                },
+                onPressed: _busy ? null : _onGetStarted,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFD9E9FF),
                   foregroundColor: Colors.blue,
@@ -56,13 +78,19 @@ class OnboardingScreen extends StatelessWidget {
                   ),
                   elevation: 0,
                 ),
-                child: const Text(
-                  'GET STARTED',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.2,
-                  ),
-                ),
+                child: _busy
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2.5),
+                      )
+                    : const Text(
+                        'GET STARTED',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
               ),
               const SizedBox(height: 24),
             ],

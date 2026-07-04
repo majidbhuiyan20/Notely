@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../model/note_data.dart';
@@ -15,11 +16,13 @@ class TaskFormController {
     String? description,
     String category = 'Personal',
     NotePriority priority = NotePriority.medium,
+    DateTime? dueDate,
     List<ChecklistItemModel>? checklist,
   })  : _title = TextEditingController(text: title ?? ''),
         _description = TextEditingController(text: description ?? ''),
         _category = category,
         _priority = priority,
+        _dueDate = dueDate,
         _checklist = List<ChecklistItemModel>.from(checklist ?? const []),
         _itemControllers = {},
         _itemFocusNodes = {} {
@@ -33,6 +36,7 @@ class TaskFormController {
   final TextEditingController _description;
   String _category;
   NotePriority _priority;
+  DateTime? _dueDate;
   final List<ChecklistItemModel> _checklist;
   final Map<String, TextEditingController> _itemControllers;
   final Map<String, FocusNode> _itemFocusNodes;
@@ -42,6 +46,7 @@ class TaskFormController {
   TextEditingController get descriptionController => _description;
   String get category => _category;
   NotePriority get priority => _priority;
+  DateTime? get dueDate => _dueDate;
   List<ChecklistItemModel> get checklist => _checklist;
   Map<String, TextEditingController> get itemControllers => _itemControllers;
   Map<String, FocusNode> get itemFocusNodes => _itemFocusNodes;
@@ -65,6 +70,11 @@ class TaskFormController {
 
   void setPriority(NotePriority value) {
     _priority = value;
+    onChanged?.call();
+  }
+
+  void setDueDate(DateTime? value) {
+    _dueDate = value;
     onChanged?.call();
   }
 
@@ -113,6 +123,7 @@ class TaskFormController {
       description: _description.text.trim(),
       category: _category,
       priority: _priority,
+      dueDate: _dueDate,
       checklist: List<ChecklistItemModel>.from(_checklist),
     );
   }
@@ -135,12 +146,14 @@ class TaskFormResult {
     required this.description,
     required this.category,
     required this.priority,
+    required this.dueDate,
     required this.checklist,
   });
   final String title;
   final String description;
   final String category;
   final NotePriority priority;
+  final DateTime? dueDate;
   final List<ChecklistItemModel> checklist;
 }
 
@@ -208,6 +221,11 @@ class TaskFormBody extends StatelessWidget {
               initialPriority: controller.priority,
               onPrioritySelected: controller.setPriority,
             ),
+          ),
+          const SizedBox(height: 16),
+          _DueDateRow(
+            value: controller.dueDate,
+            onChanged: controller.setDueDate,
           ),
           const SizedBox(height: 16),
           ChecklistEditor(
@@ -295,5 +313,157 @@ class TaskFormSaveButton extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// iOS-style tappable row that opens a modal date picker. Writes the
+/// picked DateTime (or null if "Clear") through [onChanged].
+class _DueDateRow extends StatelessWidget {
+  const _DueDateRow({required this.value, required this.onChanged});
+  final DateTime? value;
+  final ValueChanged<DateTime?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return EditFieldCard(
+      label: 'DUE DATE',
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              value == null ? 'No due date' : _format(value!),
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: value == null ? Colors.grey.shade500 : const Color(0xFF1E1E1E),
+              ),
+            ),
+          ),
+          if (value != null)
+            GestureDetector(
+              onTap: () => onChanged(null),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                child: Text(
+                  'Clear',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.grey.shade500,
+                  ),
+                ),
+              ),
+            ),
+          GestureDetector(
+            onTap: () => _pick(context),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.royalBlue.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                value == null ? 'Set date' : 'Change',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.royalBlue,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pick(BuildContext context) async {
+    final initial = value ?? DateTime.now();
+    DateTime selected = DateTime(initial.year, initial.month, initial.day);
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          top: false,
+          child: SizedBox(
+            height: 320,
+            child: Column(
+              children: [
+                const SizedBox(height: 12),
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: CupertinoDatePicker(
+                    mode: CupertinoDatePickerMode.date,
+                    initialDateTime: selected,
+                    minimumYear: DateTime.now().year - 2,
+                    maximumYear: DateTime.now().year + 5,
+                    onDateTimeChanged: (d) =>
+                        selected = DateTime(d.year, d.month, d.day),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        onChanged(selected);
+                        Navigator.of(ctx).pop();
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.royalBlue,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: const Text(
+                        'Done',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.4,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  String _format(DateTime d) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    final today = DateTime.now();
+    final t = DateTime(today.year, today.month, today.day);
+    final day = DateTime(d.year, d.month, d.day);
+    final delta = day.difference(t).inDays;
+    final base = '${months[d.month - 1]} ${d.day}, ${d.year}';
+    if (delta == 0) return 'Today ($base)';
+    if (delta == 1) return 'Tomorrow ($base)';
+    if (delta == -1) return 'Yesterday ($base)';
+    if (delta > 0) return '$base • in $delta days';
+    return '$base • ${-delta} days ago';
   }
 }
