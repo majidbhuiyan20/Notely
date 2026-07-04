@@ -1,102 +1,143 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../../core/constants/app_colors.dart';
 import '../model/note_data.dart';
 import '../model/notes_repository.dart';
+import '../providers/notes_providers.dart';
+import '../../widgets/app_snackbar.dart';
 import '../../widgets/back_button.dart';
 import 'task_form.dart';
 
-class EditTaskScreen extends StatefulWidget {
+/// Edit screen for an existing note. Mirrors [CreateTaskScreen] layout.
+/// On Save the updated note is persisted to sqflite (and pushed to
+/// Firestore in the background) via [TasksNotifier].
+class EditTaskScreen extends ConsumerStatefulWidget {
   const EditTaskScreen({super.key, this.noteId});
   final String? noteId;
 
   @override
-  State<EditTaskScreen> createState() => _EditTaskScreenState();
+  ConsumerState<EditTaskScreen> createState() => _EditTaskScreenState();
 }
 
-class _EditTaskScreenState extends State<EditTaskScreen> {
-  late final NotesRepository _repo;
+class _EditTaskScreenState extends ConsumerState<EditTaskScreen> {
   NoteData? _note;
   TaskFormController? _form;
-  bool _initialized = false;
+  bool _busy = false;
 
   @override
   void initState() {
     super.initState();
-    _repo = NotesRepository.instance;
-    _repo.addListener(_onRepoChanged);
-    _hydrate();
+    // Wait for the next frame so `ref` is ready, then hydrate from the
+    // list already loaded by the splash/tasksProvider.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _hydrate();
+    });
   }
 
   void _hydrate() {
-    _note = widget.noteId == null ? null : _repo.noteById(widget.noteId!);
-    if (_note != null) {
+    final id = widget.noteId;
+    if (id == null) return;
+    final list = ref.read(tasksProvider).value ?? const [];
+    final note = list.cast<NoteData?>().firstWhere(
+          (n) => n?.id == id,
+          orElse: () => null,
+        );
+    if (note == null) return;
+    setState(() {
+      _note = note;
       _form = TaskFormController(
-        title: _note!.title,
-        description: _note!.description,
-        category: _note!.category,
-        priority: _note!.priority,
-        dueDate: _note!.dueDateIso == null
-            ? null
-            : _parseIso(_note!.dueDateIso!),
-        checklist: _note!.checklist,
+        title: note.title,
+        description: note.description,
+        category: note.category,
+        priority: note.priority,
+        dueDate:
+            note.dueDateIso == null ? null : _parseIso(note.dueDateIso!),
+        checklist: note.checklist,
       );
       _form!.onChanged = () {
         if (mounted) setState(() {});
       };
-    }
-    _initialized = true;
-  }
-
-  void _onRepoChanged() {
-    if (mounted) setState(() {});
+    });
   }
 
   @override
   void dispose() {
-    _repo.removeListener(_onRepoChanged);
     _form?.dispose();
     super.dispose();
   }
 
-  void _save() {
+  Future<void> _save() async {
+    if (_busy) return;
     final note = _note;
     final form = _form;
     if (note == null || form == null) {
       Navigator.pop(context);
       return;
     }
+
     final snap = form.snapshot();
-    note.title = snap.title.isEmpty ? 'Untitled' : snap.title;
-    note.description = snap.description;
-    note.category = snap.category;
-    note.priority = snap.priority;
-    note.dueDateIso =
-        snap.dueDate == null ? null : _iso(snap.dueDate!);
-    note.dueDate = snap.dueDate == null ? '' : _dueDateDisplay(snap.dueDate!);
-    note.checklist
+    final updated = note.copy();
+    updated.title = snap.title.isEmpty ? 'Untitled' : snap.title;
+    updated.description = snap.description;
+    updated.category = snap.category;
+    updated.priority = snap.priority;
+    updated.dueDateIso = snap.dueDate == null ? null : _iso(snap.dueDate!);
+    updated.dueDate = snap.dueDate == null ? '' : _dueDateDisplay(snap.dueDate!);
+    updated.checklist
       ..clear()
       ..addAll(snap.checklist);
 
-    final meta = _repo.categoryMeta(snap.category);
-    note.categoryColor = meta.color;
-    note.categoryIcon = meta.icon;
+    final meta = NotesRepository.instance.categoryMeta(snap.category);
+    updated.categoryColor = meta.color;
+    updated.categoryIcon = meta.icon;
 
-    _repo.replaceNote(note);
-    Navigator.pop(context);
+    setState(() => _busy = true);
+    try {
+      await ref.read(tasksProvider.notifier).upsert(updated);
+      if (!mounted) return;
+      AppSnackbar.success(context, 'Note updated');
+      Navigator.pop(context);
+    } catch (e) {
+      if (!mounted) return;
+      AppSnackbar.error(context, e.toString());
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  String _dueDateDisplay(DateTime d) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${months[d.month - 1]} ${d.day}, ${d.year}';
+  }
+
+  String _iso(DateTime d) {
+    final m = d.month.toString().padLeft(2, '0');
+    final day = d.day.toString().padLeft(2, '0');
+    return '${d.year}-$m-$day';
+  }
+
+  DateTime? _parseIso(String iso) {
+    try {
+      final parts = iso.split('-');
+      if (parts.length != 3) return null;
+      return DateTime(
+        int.parse(parts[0]),
+        int.parse(parts[1]),
+        int.parse(parts[2]),
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!_initialized) {
-      return Scaffold(
-        backgroundColor: const Color(0xFFF2F2F7),
-        appBar: const NotelyAppBar(title: 'Edit Note'),
-        body: const SizedBox.shrink(),
-      );
-    }
-
-    final form = _form;
     final accent = AppColors.royalBlue;
+    final form = _form;
 
     if (form == null || _note == null) {
       return Scaffold(
@@ -130,12 +171,21 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
         title: 'Edit Note',
         actions: [
           TextButton(
-            onPressed: _save,
+            onPressed: _busy ? null : _save,
             style: TextButton.styleFrom(foregroundColor: accent),
-            child: const Text(
-              'Save',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-            ),
+            child: _busy
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2.5),
+                  )
+                : const Text(
+                    'Save',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
           ),
           const SizedBox(width: 8),
         ],
@@ -148,40 +198,12 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
             child: TaskFormSaveButton(
-              label: 'SAVE CHANGES',
-              onPressed: _save,
+              label: _busy ? 'SAVING…' : 'SAVE CHANGES',
+              onPressed: _busy ? null : _save,
             ),
           ),
         ],
       ),
     );
-  }
-
-  String _dueDateDisplay(DateTime d) {
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
-    return '${months[d.month - 1]} ${d.day}, ${d.year}';
-  }
-
-  String _iso(DateTime d) {
-    final m = d.month.toString().padLeft(2, '0');
-    final day = d.day.toString().padLeft(2, '0');
-    return '${d.year}-$m-$day';
-  }
-
-  DateTime? _parseIso(String iso) {
-    try {
-      final parts = iso.split('-');
-      if (parts.length != 3) return null;
-      return DateTime(
-        int.parse(parts[0]),
-        int.parse(parts[1]),
-        int.parse(parts[2]),
-      );
-    } catch (_) {
-      return null;
-    }
   }
 }

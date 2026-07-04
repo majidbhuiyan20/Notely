@@ -21,11 +21,15 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     if (_busy) return;
     setState(() => _busy = true);
     try {
-      await ref
-          .read(authRepositoryProvider)
-          .markOnboardingComplete();
+      await ref.read(authRepositoryProvider).markOnboardingComplete();
       if (!mounted) return;
-      Navigator.pushReplacementNamed(context, Routes.loginRoute);
+      // Drop the splash + onboarding from the back-stack so the user
+      // can't pop back into them.
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        Routes.loginRoute,
+        (route) => route.isFirst,
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }

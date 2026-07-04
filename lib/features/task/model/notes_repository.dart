@@ -2,19 +2,27 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import 'note_data.dart';
 
-/// Simple in-memory data store. Acts as a singleton so all screens
-/// see the same data and edits propagate everywhere via the listener API.
+/// In-memory mirror of the sqflite task table. The local DB is the
+/// source of truth; this singleton exists so existing screens (home,
+/// calendar, category, profile) can read derived statistics without
+/// each one opening sqflite on its own.
+///
+/// Writes do NOT happen here directly anymore — they go through
+/// [TaskRepository] which updates sqflite, then calls
+/// [replaceAll]/[addOrUpdate]/[remove] to keep this mirror in sync.
 class NotesRepository {
-  NotesRepository._internal() {
-    _seed();
-  }
+  NotesRepository._internal();
 
   static final NotesRepository instance = NotesRepository._internal();
 
   final List<NoteData> _notes = [];
   final List<VoidCallback> _listeners = [];
 
+  /// Read-only view of the current notes. Always a fresh list so callers
+  /// can't mutate the underlying storage by accident.
   List<NoteData> get notes => List.unmodifiable(_notes);
+
+  // ---------- listener plumbing ----------
 
   void addListener(VoidCallback cb) {
     if (!_listeners.contains(cb)) _listeners.add(cb);
@@ -28,7 +36,35 @@ class NotesRepository {
     }
   }
 
-  // ---------- queries ----------
+  // ---------- mirror maintenance (called by TaskRepository) ----------
+
+  /// Replaces the entire mirror with [next] and notifies listeners.
+  void replaceAll(List<NoteData> next) {
+    _notes
+      ..clear()
+      ..addAll(next);
+    _notify();
+  }
+
+  /// Inserts a new note or updates an existing one with the same id.
+  void addOrUpdate(NoteData note) {
+    final i = _notes.indexWhere((n) => n.id == note.id);
+    if (i == -1) {
+      _notes.add(note);
+    } else {
+      _notes[i] = note;
+    }
+    _notify();
+  }
+
+  /// Removes the note with [id]. No-op if it doesn't exist.
+  void remove(String id) {
+    final before = _notes.length;
+    _notes.removeWhere((n) => n.id == id);
+    if (_notes.length != before) _notify();
+  }
+
+  // ---------- queries (unchanged from original) ----------
 
   NoteData? noteById(String id) {
     try {
@@ -45,8 +81,6 @@ class NotesRepository {
           String category, NoteStatus status) =>
       _notes.where((n) => n.category == category && n.status == status);
 
-  /// Returns notes whose [NoteData.dueDateIso] matches the supplied ISO
-  /// date (yyyy-MM-dd). Used by the calendar feature.
   Iterable<NoteData> notesOnDate(String isoDate) =>
       _notes.where((n) => n.dueDateIso == isoDate);
 
@@ -61,19 +95,11 @@ class NotesRepository {
     return completedFor(category) / total;
   }
 
-  // ---------- mutations ----------
+  // ---------- mutations from screens that still hit the singleton ----------
 
-  void addNote(NoteData note) {
-    _notes.add(note);
-    _notify();
-  }
+  void addNote(NoteData note) => addOrUpdate(note);
 
-  void replaceNote(NoteData updated) {
-    final i = _notes.indexWhere((n) => n.id == updated.id);
-    if (i == -1) return;
-    _notes[i] = updated;
-    _notify();
-  }
+  void replaceNote(NoteData updated) => addOrUpdate(updated);
 
   /// Maps a category name to its color/icon (falls back to a neutral palette).
   ({Color color, IconData icon}) categoryMeta(String name) {
@@ -146,351 +172,6 @@ class NotesRepository {
         );
     }
   }
-
-  void toggleStatus(String id) {
-    final n = noteById(id);
-    if (n == null) return;
-    n.status = n.status == NoteStatus.completed
-        ? NoteStatus.pending
-        : NoteStatus.completed;
-    _notify();
-  }
-
-  // ---------- seed ----------
-
-  void _seed() {
-    _notes.addAll([
-      // Personal
-      NoteData(
-        id: 'n1',
-        title: 'Product RoadMap',
-        description:
-            "Plan the next quarter's feature releases and coordinate with the design team.",
-        category: 'Personal',
-        categoryColor: AppColors.green,
-        categoryIcon: Icons.person_outline,
-        status: NoteStatus.pending,
-        priority: NotePriority.high,
-        dueDate: 'Today, 10:00 AM',
-        assignee: 'John Doe',
-        reminder: '10 Min Before',
-        checklist: [
-          ChecklistItemModel(id: '1', title: 'Define product vision', isChecked: true),
-          ChecklistItemModel(id: '2', title: 'Competitor analysis', isChecked: true),
-          ChecklistItemModel(id: '3', title: 'Feature prioritization', isChecked: false),
-          ChecklistItemModel(id: '4', title: 'Release schedule', isChecked: false),
-        ],
-      ),
-      NoteData(
-        id: 'n2',
-        title: 'Morning Routine',
-        description: 'Stretch, hydrate, journal, plan day.',
-        category: 'Personal',
-        categoryColor: AppColors.green,
-        categoryIcon: Icons.person_outline,
-        status: NoteStatus.completed,
-        priority: NotePriority.low,
-        dueDate: 'Daily, 7:00 AM',
-        assignee: 'Me',
-        reminder: 'None',
-      ),
-      NoteData(
-        id: 'n3',
-        title: 'Weekend Trip Planning',
-        description: 'Book hotel and pack essentials.',
-        category: 'Personal',
-        categoryColor: AppColors.green,
-        categoryIcon: Icons.person_outline,
-        status: NoteStatus.pending,
-        priority: NotePriority.medium,
-        dueDate: 'Saturday',
-        assignee: 'Family',
-        reminder: '1 Day Before',
-      ),
-
-      // Work
-      NoteData(
-        id: 'n4',
-        title: 'Quarterly Review',
-        description: 'Compile Q3 metrics and prepare slides for stakeholders.',
-        category: 'Work',
-        categoryColor: AppColors.orange,
-        categoryIcon: Icons.work_outline,
-        status: NoteStatus.pending,
-        priority: NotePriority.high,
-        dueDate: 'Friday, 3:00 PM',
-        assignee: 'Sarah K.',
-        reminder: '30 Min Before',
-        checklist: [
-          ChecklistItemModel(id: '1', title: 'Pull revenue KPIs', isChecked: true),
-          ChecklistItemModel(id: '2', title: 'Draft executive summary', isChecked: false),
-          ChecklistItemModel(id: '3', title: 'Review with manager', isChecked: false),
-        ],
-      ),
-      NoteData(
-        id: 'n5',
-        title: 'Team Sync Notes',
-        description: 'Capture action items from weekly team standup.',
-        category: 'Work',
-        categoryColor: AppColors.orange,
-        categoryIcon: Icons.work_outline,
-        status: NoteStatus.completed,
-        priority: NotePriority.medium,
-        dueDate: 'Mon, 11:00 AM',
-        assignee: 'Team',
-        reminder: 'None',
-      ),
-      NoteData(
-        id: 'n6',
-        title: 'Client Proposal Draft',
-        description: 'Outline scope, timeline, and pricing for Acme Corp.',
-        category: 'Work',
-        categoryColor: AppColors.orange,
-        categoryIcon: Icons.work_outline,
-        status: NoteStatus.pending,
-        priority: NotePriority.medium,
-        dueDate: 'Wed, 5:00 PM',
-        assignee: 'Michael P.',
-        reminder: '1 Hour Before',
-      ),
-      NoteData(
-        id: 'n7',
-        title: 'Bug Triage Sprint',
-        description: 'Review, prioritize and assign open issues from this sprint.',
-        category: 'Work',
-        categoryColor: AppColors.orange,
-        categoryIcon: Icons.work_outline,
-        status: NoteStatus.completed,
-        priority: NotePriority.low,
-        dueDate: 'Yesterday',
-        assignee: 'Engineering',
-        reminder: 'None',
-      ),
-      NoteData(
-        id: 'n8',
-        title: 'Annual Performance Self-Review',
-        description: 'Reflect on goals, achievements, and areas to grow.',
-        category: 'Work',
-        categoryColor: AppColors.orange,
-        categoryIcon: Icons.work_outline,
-        status: NoteStatus.pending,
-        priority: NotePriority.high,
-        dueDate: 'Oct 30, 5:00 PM',
-        assignee: 'Self',
-        reminder: '2 Days Before',
-      ),
-
-      // Health
-      NoteData(
-        id: 'n9',
-        title: '30-Day Workout Challenge',
-        description: 'Daily 30 min workout. Track progress.',
-        category: 'Health',
-        categoryColor: AppColors.red,
-        categoryIcon: Icons.favorite_border,
-        status: NoteStatus.pending,
-        priority: NotePriority.medium,
-        dueDate: 'Daily',
-        assignee: 'Me',
-        reminder: 'Every Morning',
-        checklist: [
-          ChecklistItemModel(id: '1', title: 'Stretching', isChecked: true),
-          ChecklistItemModel(id: '2', title: 'Cardio', isChecked: true),
-          ChecklistItemModel(id: '3', title: 'Cool down', isChecked: false),
-        ],
-      ),
-      NoteData(
-        id: 'n10',
-        title: 'Annual Health Checkup',
-        description: 'Schedule appointment with primary care physician.',
-        category: 'Health',
-        categoryColor: AppColors.red,
-        categoryIcon: Icons.favorite_border,
-        status: NoteStatus.completed,
-        priority: NotePriority.high,
-        dueDate: 'Last week',
-        assignee: 'Dr. Lee',
-        reminder: 'Done',
-      ),
-      NoteData(
-        id: 'n11',
-        title: 'Meal Prep Sunday',
-        description: 'Plan and cook meals for the week.',
-        category: 'Health',
-        categoryColor: AppColors.red,
-        categoryIcon: Icons.favorite_border,
-        status: NoteStatus.pending,
-        priority: NotePriority.low,
-        dueDate: 'Sunday, 11:00 AM',
-        assignee: 'Me',
-        reminder: 'Morning Of',
-      ),
-      NoteData(
-        id: 'n12',
-        title: 'Hydration Goal',
-        description: 'Drink at least 2.5L of water per day.',
-        category: 'Health',
-        categoryColor: AppColors.red,
-        categoryIcon: Icons.favorite_border,
-        status: NoteStatus.completed,
-        priority: NotePriority.low,
-        dueDate: 'Daily',
-        assignee: 'Me',
-        reminder: 'None',
-      ),
-      NoteData(
-        id: 'n13',
-        title: 'Sleep Tracking',
-        description: 'Try to sleep 7+ hours every night this month.',
-        category: 'Health',
-        categoryColor: AppColors.red,
-        categoryIcon: Icons.favorite_border,
-        status: NoteStatus.pending,
-        priority: NotePriority.medium,
-        dueDate: 'Daily',
-        assignee: 'Me',
-        reminder: '10:00 PM',
-      ),
-
-      // Ideas
-      NoteData(
-        id: 'n14',
-        title: 'App Idea: Habit Garden',
-        description: 'Tie habit streaks to a virtual growing garden.',
-        category: 'Ideas',
-        categoryColor: AppColors.purple,
-        categoryIcon: Icons.lightbulb_outline,
-        status: NoteStatus.pending,
-        priority: NotePriority.high,
-        dueDate: 'Whenever',
-        assignee: 'Brain',
-        reminder: 'None',
-      ),
-      NoteData(
-        id: 'n15',
-        title: 'Blog Post: Focus Modes',
-        description: 'Write about three deep-work setups that worked for me.',
-        category: 'Ideas',
-        categoryColor: AppColors.purple,
-        categoryIcon: Icons.lightbulb_outline,
-        status: NoteStatus.pending,
-        priority: NotePriority.medium,
-        dueDate: 'Next week',
-        assignee: 'Me',
-        reminder: 'None',
-      ),
-
-      // Shopping
-      NoteData(
-        id: 'n16',
-        title: 'Weekly Grocery',
-        description: 'Milk, eggs, bread, veggies, fruits.',
-        category: 'Shopping',
-        categoryColor: AppColors.pink,
-        categoryIcon: Icons.shopping_cart_outlined,
-        status: NoteStatus.pending,
-        priority: NotePriority.low,
-        dueDate: 'Saturday',
-        assignee: 'Me',
-        reminder: 'None',
-      ),
-      NoteData(
-        id: 'n17',
-        title: 'Birthday Gift - Mom',
-        description: 'Order a scarf and write a card.',
-        category: 'Shopping',
-        categoryColor: AppColors.pink,
-        categoryIcon: Icons.shopping_cart_outlined,
-        status: NoteStatus.pending,
-        priority: NotePriority.high,
-        dueDate: 'Oct 25',
-        assignee: 'Me',
-        reminder: '1 Week Before',
-      ),
-      NoteData(
-        id: 'n18',
-        title: 'Replace Phone Charger',
-        description: 'Buy a 2m USB-C cable.',
-        category: 'Shopping',
-        categoryColor: AppColors.pink,
-        categoryIcon: Icons.shopping_cart_outlined,
-        status: NoteStatus.completed,
-        priority: NotePriority.low,
-        dueDate: 'Yesterday',
-        assignee: 'Me',
-        reminder: 'None',
-      ),
-
-      // Dated samples used by the calendar feature. The dates are picked
-      // relative to "today" at app start – see [_today].
-      NoteData(
-        id: 'n19',
-        title: 'Doctor Appointment',
-        description: 'Annual physical checkup and blood work.',
-        category: 'Health',
-        categoryColor: AppColors.red,
-        categoryIcon: Icons.favorite_border,
-        status: NoteStatus.pending,
-        priority: NotePriority.high,
-        dueDate: 'Today',
-        dueDateIso: _todayIso(),
-        assignee: 'Dr. Lee',
-        reminder: '1 Hour Before',
-      ),
-      NoteData(
-        id: 'n20',
-        title: 'Project Sync',
-        description: 'Weekly project status sync with the design team.',
-        category: 'Work',
-        categoryColor: AppColors.orange,
-        categoryIcon: Icons.work_outline,
-        status: NoteStatus.pending,
-        priority: NotePriority.medium,
-        dueDate: 'Today',
-        dueDateIso: _todayIso(),
-        assignee: 'Team',
-        reminder: '15 Min Before',
-      ),
-      NoteData(
-        id: 'n21',
-        title: 'Yoga Class',
-        description: 'Evening yoga session at the studio.',
-        category: 'Health',
-        categoryColor: AppColors.red,
-        categoryIcon: Icons.favorite_border,
-        status: NoteStatus.pending,
-        priority: NotePriority.low,
-        dueDate: 'Tomorrow',
-        dueDateIso: _todayIso(addDays: 1),
-        assignee: 'Me',
-        reminder: 'Morning Of',
-      ),
-      NoteData(
-        id: 'n22',
-        title: 'Pick Up Dry Cleaning',
-        description: 'Drop off and pick up suits from the dry cleaner.',
-        category: 'Shopping',
-        categoryColor: AppColors.pink,
-        categoryIcon: Icons.shopping_cart_outlined,
-        status: NoteStatus.pending,
-        priority: NotePriority.low,
-        dueDate: 'In 2 days',
-        dueDateIso: _todayIso(addDays: 2),
-        assignee: 'Me',
-        reminder: 'None',
-      ),
-    ]);
-  }
-}
-
-/// Returns the local-date ISO string for [addDays] days from today.
-String _todayIso({int addDays = 0}) {
-  final now = DateTime.now();
-  final d = DateTime(now.year, now.month, now.day).add(Duration(days: addDays));
-  final y = d.year.toString().padLeft(4, '0');
-  final m = d.month.toString().padLeft(2, '0');
-  final day = d.day.toString().padLeft(2, '0');
-  return '$y-$m-$day';
 }
 
 /// Convenience: priority sort comparator — High → Medium → Low.

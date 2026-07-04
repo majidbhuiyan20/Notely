@@ -29,11 +29,18 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
         bootStateProvider,
         (prev, next) {
           if (!mounted) return;
-          // Wait until the future resolves successfully; loading/error
-          // states are handled by the global error widget for now.
-          if (!next.hasValue) return;
-          _sub?.close();
-          _route(next.requireValue);
+          if (next.hasValue) {
+            _sub?.close();
+            _route(next.requireValue);
+            return;
+          }
+          if (next.hasError) {
+            // If the bootstrap future fails (corrupt prefs, plugin
+            // missing, etc.) fall through to the Login screen so the
+            // user isn't stuck on the splash.
+            _sub?.close();
+            Navigator.pushReplacementNamed(context, Routes.loginRoute);
+          }
         },
         fireImmediately: true,
       );

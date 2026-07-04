@@ -1,32 +1,33 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/route/app_route.dart';
 import '../../../widgets/app_snackbar.dart';
+import '../../domain/entities/auth_user.dart';
 import '../providers/auth_providers.dart';
 
-/// First screen an unauthenticated user sees. Offers Google Sign-In and,
-/// after a successful sign-in, transitions to the main app with a green
-/// "Signed in" snackbar.
+/// Sign-in screen. Shows the Notely brand mark (loaded from the
+/// `assets/images/` folder), a premium gradient backdrop and a single,
+/// large Google Sign-In CTA. After a successful sign-in we
+/// push the main app and pop the back-stack so the user can't return to
+/// the login screen with the system back gesture.
 class LoginScreen extends ConsumerWidget {
   const LoginScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final authState = ref.watch(authNotifierProvider);
-    final isLoading = authState.isLoading;
+    // Watched solely to trigger rebuilds when auth state changes; the
+    // actual state is consumed via [ref.listen] below.
+    ref.watch(authNotifierProvider);
 
     ref.listen(authNotifierProvider, (previous, next) {
       next.whenOrNull(
         data: (user) {
           if (user == null) return;
-          // Show a green success snackbar, then push the main app and
-          // wipe the back-stack so the user can't pop back into Login.
-          AppSnackbar.success(
-            context,
-            'Signed in as ${user.firstName}',
-          );
+          AppSnackbar.success(context, 'Signed in as ${user.firstName}');
           Navigator.pushNamedAndRemoveUntil(
             context,
             Routes.mainRoute,
@@ -34,116 +35,213 @@ class LoginScreen extends ConsumerWidget {
           );
         },
         error: (err, _) {
-          AppSnackbar.error(context, err.toString());
+          AppSnackbar.error(context, _friendlyAuthError(err));
         },
       );
     });
 
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Spacer(flex: 2),
-              const Center(child: _BrandMark()),
-              const SizedBox(height: 24),
-              const Text(
-                'Welcome to Notely',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w900,
-                  color: Color(0xFF1E1E1E),
-                  letterSpacing: -0.5,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                "The world's safest place to write and store all your notes.",
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 15,
-                  color: Colors.grey.shade600,
-                  height: 1.5,
-                ),
-              ),
-              const Spacer(flex: 3),
-              _GoogleSignInButton(
-                isLoading: isLoading,
-                onPressed: () => ref
-                    .read(authNotifierProvider.notifier)
-                    .signInWithGoogle(),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'By continuing you agree to our Terms & Privacy Policy.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: Colors.grey.shade500,
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
-          ),
-        ),
+      body: Stack(
+        children: const [
+          _Backdrop(),
+          SafeArea(child: _LoginBody()),
+        ],
       ),
     );
   }
 }
 
-class _BrandMark extends StatelessWidget {
-  const _BrandMark();
+/// Big soft gradient blobs in the background — gives the screen a
+/// premium, editorial feel without any extra assets.
+class _Backdrop extends StatelessWidget {
+  const _Backdrop();
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        const ColoredBox(color: Color(0xFFF6F8FF)),
+        Positioned(
+          top: -120,
+          left: -80,
+          child: _Blob(
+            size: 280,
+            color: AppColors.royalBlue.withValues(alpha: 0.18),
+          ),
+        ),
+        Positioned(
+          top: 60,
+          right: -100,
+          child: _Blob(
+            size: 220,
+            color: const Color(0xFF7B91FF).withValues(alpha: 0.22),
+          ),
+        ),
+        Positioned(
+          bottom: -140,
+          right: -60,
+          child: _Blob(
+            size: 320,
+            color: AppColors.royalBlue.withValues(alpha: 0.14),
+          ),
+        ),
+        Positioned.fill(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
+            child: const SizedBox.shrink(),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _Blob extends StatelessWidget {
+  const _Blob({required this.size, required this.color});
+  final double size;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 96,
-      height: 96,
+      width: size,
+      height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AppColors.royalBlue, Color(0xFF7B91FF)],
+        gradient: RadialGradient(
+          colors: [color, color.withValues(alpha: 0)],
         ),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.royalBlue.withOpacity(0.35),
-            blurRadius: 18,
-            spreadRadius: 2,
-          ),
-        ],
-      ),
-      child: const Icon(
-        Icons.note_alt_rounded,
-        color: Colors.white,
-        size: 48,
       ),
     );
   }
 }
 
-class _GoogleSignInButton extends StatelessWidget {
-  const _GoogleSignInButton({required this.isLoading, required this.onPressed});
+class _LoginBody extends ConsumerWidget {
+  const _LoginBody();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isLoading = ref.watch(authNotifierProvider).isLoading;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Spacer(flex: 2),
+          const _BrandHeader(),
+          const Spacer(flex: 3),
+          _PrimaryGoogleButton(
+            isLoading: isLoading,
+            onPressed: () =>
+                ref.read(authNotifierProvider.notifier).signInWithGoogle(),
+          ),
+          const SizedBox(height: 14),
+          const _LegalFooter(),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+}
+
+/// The big rounded app-logo card at the top of the screen. We load the
+/// real `assets/images/logo.png` and frame it on a soft white surface
+/// with a subtle shadow + gradient so it feels like a real product.
+class _BrandHeader extends StatelessWidget {
+  const _BrandHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Container(
+          width: 132,
+          height: 132,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(36),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.royalBlue.withValues(alpha: 0.18),
+                blurRadius: 32,
+                spreadRadius: 4,
+                offset: const Offset(0, 12),
+              ),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 18,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: Image.asset(
+              'assets/images/logo.png',
+              fit: BoxFit.contain,
+            ),
+          ),
+        ),
+        const SizedBox(height: 28),
+        const Text(
+          'Welcome to Notely',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 30,
+            fontWeight: FontWeight.w900,
+            color: Color(0xFF1B1F3A),
+            letterSpacing: -0.8,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Text(
+            "The safest place to write, organise and store all your notes — "
+            "synced across your devices, always within reach.",
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 15,
+              color: Colors.grey.shade700,
+              height: 1.5,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Premium pill-shaped Google button. Matches the Google brand
+/// guideline (white background, dark text, G glyph in the correct blue)
+/// but with extra rounding + shadow to read as "premium".
+class _PrimaryGoogleButton extends StatelessWidget {
+  const _PrimaryGoogleButton({
+    required this.isLoading,
+    required this.onPressed,
+  });
+
   final bool isLoading;
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 56,
+      height: 60,
       child: ElevatedButton(
         onPressed: isLoading ? null : onPressed,
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFFF1F3F4),
-          foregroundColor: const Color(0xFF1E1E1E),
+          backgroundColor: Colors.white,
+          foregroundColor: const Color(0xFF1B1F3A),
           elevation: 0,
+          shadowColor: AppColors.royalBlue.withValues(alpha: 0.35),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(20),
+            side: BorderSide(color: Colors.grey.shade200, width: 1),
           ),
         ),
         child: isLoading
@@ -160,31 +258,14 @@ class _GoogleSignInButton extends StatelessWidget {
             : Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Container(
-                    width: 24,
-                    height: 24,
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white,
-                    ),
-                    child: const Center(
-                      child: Text(
-                        'G',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w900,
-                          fontSize: 15,
-                          color: Color(0xFF4285F4),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
+                  const _GoogleGlyph(),
+                  const SizedBox(width: 14),
                   const Text(
                     'Continue with Google',
                     style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.2,
+                      fontSize: 16.5,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.1,
                     ),
                   ),
                 ],
@@ -192,4 +273,108 @@ class _GoogleSignInButton extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Multi-coloured "G" — proper Google brand colors. We draw it from
+/// scratch (a white circle + a coloured text glyph + a coloured quarter
+/// arc) so we don't need any extra assets.
+class _GoogleGlyph extends StatelessWidget {
+  const _GoogleGlyph();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 24,
+      height: 24,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Blue quarter (top-right). Real Google brand has 4 colours
+          // blended, but a stylised stack reads cleanly at this size.
+          Positioned(
+            right: 0,
+            top: 0,
+            child: Container(
+              width: 12,
+              height: 12,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: Color(0xFF4285F4),
+              ),
+            ),
+          ),
+          Positioned(
+            right: 0,
+            bottom: 0,
+            child: Container(
+              width: 12,
+              height: 12,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: Color(0xFF34A853),
+              ),
+            ),
+          ),
+          Positioned(
+            left: 0,
+            bottom: 0,
+            child: Container(
+              width: 12,
+              height: 12,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: Color(0xFFFBBC05),
+              ),
+            ),
+          ),
+          Positioned(
+            left: 0,
+            top: 0,
+            child: Container(
+              width: 12,
+              height: 12,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: Color(0xFFEA4335),
+              ),
+            ),
+          ),
+          const Text(
+            'G',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+              letterSpacing: -0.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LegalFooter extends StatelessWidget {
+  const _LegalFooter();
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      'By continuing you agree to our Terms & Privacy Policy.',
+      textAlign: TextAlign.center,
+      style: TextStyle(
+        fontSize: 12,
+        color: Colors.grey.shade500,
+        fontWeight: FontWeight.w500,
+      ),
+    );
+  }
+}
+
+/// Returns a user-friendly error string for the snackbar. We unwrap our
+/// own [AuthFailure] (whose message is already user-friendly) and fall
+/// back to a generic message for anything else.
+String _friendlyAuthError(Object err) {
+  if (err is AuthFailure) return err.message;
+  return 'Could not sign you in. Please try again in a moment.';
 }

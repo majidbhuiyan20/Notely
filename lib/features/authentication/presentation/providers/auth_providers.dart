@@ -5,6 +5,7 @@ import '../../data/datasources/auth_remote_datasource.dart';
 import '../../data/repositories/auth_repository_impl.dart';
 import '../../domain/entities/auth_user.dart';
 import '../../domain/repositories/auth_repository.dart';
+import '../../../task/providers/notes_providers.dart';
 
 /// DI providers for the authentication feature. The data sources are
 /// kept as separate providers so tests (and the override in `main.dart`)
@@ -41,6 +42,10 @@ class AuthNotifier extends AsyncNotifier<AuthUser?> {
       final repo = ref.read(authRepositoryProvider);
       final user = await repo.signInWithGoogle();
       state = AsyncValue.data(user);
+      // Pull the user's tasks from Firestore and replace the local cache
+      // so the rest of the app sees their data immediately.
+      // ignore: discarded_futures
+      ref.read(tasksProvider.notifier).refresh();
     } catch (e, st) {
       state = AsyncValue.error(e, st);
     }
@@ -49,6 +54,10 @@ class AuthNotifier extends AsyncNotifier<AuthUser?> {
   Future<void> signOut() async {
     final repo = ref.read(authRepositoryProvider);
     await repo.signOut();
+    // Per product decision: keep local tasks for the next sign-in. We
+    // just clear the in-memory mirror so nothing from the previous user
+    // is shown while the new user is being authenticated.
+    ref.read(tasksProvider.notifier).clearLocal();
     state = const AsyncValue.data(null);
   }
 }
