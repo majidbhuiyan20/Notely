@@ -1,12 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../authentication/presentation/providers/auth_providers.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/route/app_route.dart';
 import '../widgets/category_progress_list.dart';
-import '../widgets/overall_progress_card.dart';
 import '../widgets/profile_app_bar.dart';
+import '../widgets/profile_section_header.dart';
+import '../widgets/stats_grid.dart';
+import '../widgets/weekly_sparkline_card.dart';
 
+/// Premium Profile tab. Reads from [notesListProvider] (in-memory
+/// cache) so it stays fast offline. Layout:
+///
+///   1. ProfileAppBar — gradient hero with parallax avatar + streak pill.
+///   2. StatsGrid     — Today / Week / Month / Total glass cards.
+///   3. WeeklySparklineCard — 7-bar activity chart.
+///   4. Category Progress   — restyled category breakdown.
+///   5. Account tile        — sign-out, restyled.
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
@@ -29,20 +40,28 @@ class ProfileScreen extends ConsumerWidget {
           ),
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                AppSpacing.xl,
+                AppSpacing.lg,
+                0,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const OverallProgressCard(),
-                  const SizedBox(height: 28),
-                  _buildSectionTitle('Category Progress'),
-                  const SizedBox(height: 14),
+                  const StatsGrid(),
+                  const SizedBox(height: AppSpacing.xl),
+                  const WeeklySparklineCard(),
+                  const SizedBox(height: AppSpacing.xl),
+                  const ProfileSectionHeader(title: 'Category Progress'),
+                  const SizedBox(height: AppSpacing.md),
                   const CategoryProgressList(),
-                  const SizedBox(height: 28),
-                  _buildSectionTitle('Account'),
-                  const SizedBox(height: 12),
-                  _SignOutTile(
-                    onTap: () async {
+                  const SizedBox(height: AppSpacing.xl),
+                  const ProfileSectionHeader(title: 'Account'),
+                  const SizedBox(height: AppSpacing.md),
+                  _AccountCard(
+                    email: email,
+                    onSignOut: () async {
                       await ref
                           .read(authNotifierProvider.notifier)
                           .signOut();
@@ -54,7 +73,7 @@ class ProfileScreen extends ConsumerWidget {
                       );
                     },
                   ),
-                  const SizedBox(height: 100),
+                  const SizedBox(height: 120),
                 ],
               ),
             ),
@@ -63,69 +82,142 @@ class ProfileScreen extends ConsumerWidget {
       ),
     );
   }
-
-  Widget _buildSectionTitle(String title) {
-    return Text(
-      title,
-      style: const TextStyle(
-        fontSize: 18,
-        fontWeight: FontWeight.w800,
-        color: Color(0xFF1E1E1E),
-        letterSpacing: -0.4,
-      ),
-    );
-  }
 }
 
-class _SignOutTile extends StatelessWidget {
-  const _SignOutTile({required this.onTap});
-  final VoidCallback onTap;
+/// Account row containing the user's email and a destructive
+/// sign-out action. Restyled with frosted card surface + gradient
+/// icon to match the rest of the screen.
+class _AccountCard extends StatelessWidget {
+  const _AccountCard({required this.email, required this.onSignOut});
+  final String email;
+  final VoidCallback onSignOut;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
-      elevation: 1,
-      shadowColor: Colors.black.withValues(alpha: 0.04),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-          child: Row(
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: AppColors.red.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(
-                  Icons.logout_rounded,
-                  size: 20,
-                  color: AppColors.red,
-                ),
-              ),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Text(
-                  'Sign out',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.red,
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        boxShadow: AppElevation.cardShadow,
+        border: Border.all(color: AppColors.divider, width: 0.8),
+      ),
+      child: Column(
+        children: [
+          if (email.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: AppColors.brandGradient,
+                      ),
+                      borderRadius: BorderRadius.circular(11),
+                    ),
+                    child: const Icon(
+                      Icons.alternate_email_rounded,
+                      color: Colors.white,
+                      size: 18,
+                    ),
                   ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Signed in as',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textSecondary,
+                            letterSpacing: 0.1,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          email,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          if (email.isNotEmpty)
+            Container(
+              height: 1,
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    AppColors.divider,
+                    AppColors.divider.withValues(alpha: 0.0),
+                  ],
                 ),
               ),
-              Icon(
-                Icons.chevron_right_rounded,
-                color: Colors.grey.shade400,
+            ),
+          Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(14),
+            child: InkWell(
+              onTap: onSignOut,
+              borderRadius: BorderRadius.circular(14),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 4,
+                  vertical: 10,
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: AppColors.error.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                      child: const Icon(
+                        Icons.logout_rounded,
+                        size: 18,
+                        color: AppColors.error,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    const Expanded(
+                      child: Text(
+                        'Sign out',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.error,
+                          letterSpacing: -0.1,
+                        ),
+                      ),
+                    ),
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      color: AppColors.textTertiary,
+                    ),
+                  ],
+                ),
               ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

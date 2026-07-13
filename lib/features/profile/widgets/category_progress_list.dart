@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/constants/app_colors.dart';
 import '../../task/model/note_data.dart';
 import '../../task/providers/notes_providers.dart';
 
-/// Single-row progress card used inside the profile screen.
+/// Premium frosted-glass card used inside the profile screen to show
+/// per-category progress. Animates the progress bar from 0 on first
+/// build so the screen feels alive when you scroll into it.
 class CategoryProgressTile extends StatelessWidget {
   const CategoryProgressTile({
     super.key,
@@ -28,21 +31,30 @@ class CategoryProgressTile extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.grey.shade100),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        boxShadow: AppElevation.cardShadow,
+        border: Border.all(color: AppColors.divider, width: 0.8),
       ),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            width: 44,
+            height: 44,
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  color.withValues(alpha: 0.22),
+                  color.withValues(alpha: 0.08),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(13),
             ),
             child: Icon(icon, color: color, size: 22),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -56,50 +68,75 @@ class CategoryProgressTile extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 16,
-                          color: Color(0xFF1E1E1E),
+                          fontWeight: FontWeight.w800,
+                          fontSize: 15,
+                          color: AppColors.textPrimary,
+                          letterSpacing: -0.2,
                         ),
                       ),
                     ),
-                    Text(
-                      '$completed / $total',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 12.5,
-                        color: Colors.grey.shade600,
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(AppRadius.pill),
+                      ),
+                      child: Text(
+                        '$completed / $total',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 11,
+                          color: color,
+                          letterSpacing: 0.2,
+                        ),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: AppSpacing.sm),
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(6),
                   child: TweenAnimationBuilder<double>(
-                    tween: Tween(begin: 0.0, end: progress.clamp(0.0, 1.0)),
-                    duration: const Duration(milliseconds: 700),
+                    tween:
+                        Tween(begin: 0.0, end: progress.clamp(0.0, 1.0)),
+                    duration: const Duration(milliseconds: 800),
                     curve: Curves.easeOutCubic,
                     builder: (context, value, _) {
                       return LinearProgressIndicator(
                         value: value,
-                        minHeight: 6,
-                        backgroundColor: Colors.grey.shade50,
+                        minHeight: 8,
+                        backgroundColor: AppColors.surfaceAlt,
                         valueColor: AlwaysStoppedAnimation<Color>(color),
                       );
                     },
                   ),
                 ),
                 const SizedBox(height: 6),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Text(
-                    '$percent% done',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 11,
-                      color: color,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '$percent% complete',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 11,
+                        color: color,
+                      ),
                     ),
-                  ),
+                    Text(
+                      total == 0
+                          ? 'No tasks'
+                          : '${total - completed} pending',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 11,
+                        color: AppColors.textTertiary,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -122,24 +159,33 @@ class CategoryProgressList extends ConsumerWidget {
       return Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.grey.shade100),
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(color: AppColors.divider, width: 0.8),
+          boxShadow: AppElevation.cardShadow,
         ),
         child: Row(
           children: [
-            Icon(
-              Icons.folder_open_rounded,
-              size: 22,
-              color: Colors.grey.shade400,
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: AppColors.surfaceAlt,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.folder_open_rounded,
+                size: 20,
+                color: AppColors.textTertiary,
+              ),
             ),
-            const SizedBox(width: 10),
-            Expanded(
+            const SizedBox(width: AppSpacing.md),
+            const Expanded(
               child: Text(
                 'Categories appear here once you create notes.',
                 style: TextStyle(
                   fontSize: 13,
-                  color: Colors.grey.shade600,
+                  color: AppColors.textSecondary,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -162,7 +208,7 @@ class CategoryProgressList extends ConsumerWidget {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: entries.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 12),
+      separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
       itemBuilder: (context, i) {
         final entry = entries[i];
         final catNotes = entry.value;
