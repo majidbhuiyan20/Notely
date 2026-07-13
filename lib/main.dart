@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:notely/core/route/app_route.dart';
+import 'package:notely/core/theme/app_theme.dart';
 import 'package:notely/features/authentication/data/datasources/auth_local_datasource.dart';
 import 'package:notely/features/authentication/presentation/providers/auth_providers.dart';
 import 'package:notely/features/sync/presentation/sync_bootstrap.dart';
@@ -43,10 +44,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Notely',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
-      ),
+      theme: AppTheme.light(),
       onGenerateRoute: RouteGenerator.getRoute,
       initialRoute: Routes.splashRoute,
     );

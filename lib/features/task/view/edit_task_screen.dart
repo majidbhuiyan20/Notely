@@ -9,22 +9,14 @@ import '../../widgets/app_snackbar.dart';
 import '../../widgets/back_button.dart';
 import 'task_form.dart';
 
-/// Edit screen for an existing note. Mirrors [CreateTaskScreen] layout.
-/// On Save the updated note is persisted to sqflite (and pushed to
-/// Firestore in the background) via [TasksNotifier].
-///
-/// Busy state lives in a [ValueNotifier] so toggling it doesn't trigger
-/// a full rebuild that could race with Riverpod's provider rebuild chain.
-/// The note being edited is derived from [tasksProvider] so the screen
-/// itself is a stateless [ConsumerWidget] — no `setState`, no hydration
-/// race.
+/// Edit screen for an existing note. Mirrors [CreateTaskScreen] layout
+/// so the two experiences feel consistent.
 class EditTaskScreen extends ConsumerWidget {
   const EditTaskScreen({super.key, this.noteId});
   final String? noteId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final accent = AppColors.royalBlue;
     final id = noteId;
     final list = ref.watch(tasksProvider).value ?? const [];
     final note = id == null
@@ -34,18 +26,15 @@ class EditTaskScreen extends ConsumerWidget {
             orElse: () => null,
           );
 
-    if (note == null) {
-      return _NoteNotFound(accent: accent);
-    }
+    if (note == null) return const _NoteNotFound();
 
-    return _EditTaskScreenBody(note: note, accent: accent);
+    return _EditTaskScreenBody(note: note);
   }
 }
 
 class _EditTaskScreenBody extends ConsumerStatefulWidget {
-  const _EditTaskScreenBody({required this.note, required this.accent});
+  const _EditTaskScreenBody({required this.note});
   final NoteData note;
-  final Color accent;
 
   @override
   ConsumerState<_EditTaskScreenBody> createState() =>
@@ -141,9 +130,8 @@ class _EditTaskScreenBodyState extends ConsumerState<_EditTaskScreenBody> {
 
   @override
   Widget build(BuildContext context) {
-    final accent = widget.accent;
     return Scaffold(
-      backgroundColor: const Color(0xFFF2F2F7),
+      backgroundColor: AppColors.background,
       appBar: NotelyAppBar(
         title: 'Edit Note',
         actions: [
@@ -152,7 +140,9 @@ class _EditTaskScreenBodyState extends ConsumerState<_EditTaskScreenBody> {
             builder: (context, busy, _) {
               return TextButton(
                 onPressed: busy ? null : _save,
-                style: TextButton.styleFrom(foregroundColor: accent),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.brandPrimary,
+                ),
                 child: busy
                     ? const SizedBox(
                         width: 18,
@@ -163,7 +153,7 @@ class _EditTaskScreenBodyState extends ConsumerState<_EditTaskScreenBody> {
                         'Save',
                         style: TextStyle(
                           fontSize: 16,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
               );
@@ -177,17 +167,32 @@ class _EditTaskScreenBodyState extends ConsumerState<_EditTaskScreenBody> {
           Expanded(
             child: TaskFormBody(controller: _form),
           ),
-          ValueListenableBuilder<bool>(
-            valueListenable: _busy,
-            builder: (context, busy, _) {
-              return Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                child: TaskFormSaveButton(
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.background,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 18,
+                  offset: const Offset(0, -4),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.xl,
+              AppSpacing.md,
+              AppSpacing.xl,
+              AppSpacing.xl,
+            ),
+            child: ValueListenableBuilder<bool>(
+              valueListenable: _busy,
+              builder: (context, busy, _) {
+                return TaskFormSaveButton(
                   label: busy ? 'SAVING…' : 'SAVE CHANGES',
                   onPressed: busy ? null : _save,
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
         ],
       ),
@@ -195,17 +200,13 @@ class _EditTaskScreenBodyState extends ConsumerState<_EditTaskScreenBody> {
   }
 }
 
-/// Empty state for [EditTaskScreen] when the requested note id can't be
-/// found in [tasksProvider]. Kept as a dedicated widget so the parent
-/// stays a stateless [ConsumerWidget].
 class _NoteNotFound extends StatelessWidget {
-  const _NoteNotFound({required this.accent});
-  final Color accent;
+  const _NoteNotFound();
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF2F2F7),
+      backgroundColor: AppColors.background,
       appBar: NotelyAppBar(
         title: 'Edit Note',
         actions: [
@@ -216,14 +217,12 @@ class _NoteNotFound extends StatelessWidget {
           const SizedBox(width: 8),
         ],
       ),
-      body: const Center(
+      body: Center(
         child: Text(
           'Note not found',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: Colors.black54,
-          ),
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: AppColors.textSecondary,
+              ),
         ),
       ),
     );

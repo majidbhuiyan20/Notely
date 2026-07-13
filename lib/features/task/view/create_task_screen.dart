@@ -9,18 +9,11 @@ import '../../widgets/app_snackbar.dart';
 import '../../widgets/back_button.dart';
 import 'task_form.dart';
 
-/// Screen for creating a brand new note. Mirrors the EditNote layout
-/// (title, category, description, checklist) so the two experiences
-/// feel consistent. On Save the new note is persisted to sqflite (and
-/// pushed to Firestore in the background) via [TasksNotifier].
-///
-/// Uses a [ValueNotifier] for the spinner-vs-button-label toggle instead
-/// of `setState` so toggling it doesn't trigger a full widget rebuild.
+/// Screen for creating a brand new note. Wraps the shared
+/// [TaskFormBody] with a sticky save button and a clean app bar.
 class CreateTaskScreen extends ConsumerStatefulWidget {
   const CreateTaskScreen({super.key, this.initialCategory});
 
-  /// Optional category to preselect when navigating from the category
-  /// details screen.
   final String? initialCategory;
 
   @override
@@ -88,8 +81,6 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
     }
   }
 
-  /// Cheap human-readable label for the task details screen's "Due Date"
-  /// row. Calendar feature reads [NoteData.dueDateIso] separately.
   String _dueDateDisplay(DateTime? d) {
     if (d == null) return '';
     const months = [
@@ -107,9 +98,8 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final accent = AppColors.royalBlue;
     return Scaffold(
-      backgroundColor: const Color(0xFFF2F2F7),
+      backgroundColor: AppColors.background,
       appBar: NotelyAppBar(
         title: 'New Note',
         actions: [
@@ -118,7 +108,9 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
             builder: (context, busy, _) {
               return TextButton(
                 onPressed: busy ? null : _save,
-                style: TextButton.styleFrom(foregroundColor: accent),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.brandPrimary,
+                ),
                 child: busy
                     ? const SizedBox(
                         width: 18,
@@ -129,7 +121,7 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
                         'Save',
                         style: TextStyle(
                           fontSize: 16,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
               );
@@ -143,17 +135,32 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
           Expanded(
             child: TaskFormBody(controller: _form),
           ),
-          ValueListenableBuilder<bool>(
-            valueListenable: _busy,
-            builder: (context, busy, _) {
-              return Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                child: TaskFormSaveButton(
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.background,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 18,
+                  offset: const Offset(0, -4),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.xl,
+              AppSpacing.md,
+              AppSpacing.xl,
+              AppSpacing.xl,
+            ),
+            child: ValueListenableBuilder<bool>(
+              valueListenable: _busy,
+              builder: (context, busy, _) {
+                return TaskFormSaveButton(
                   label: busy ? 'SAVING…' : 'CREATE NOTE',
                   onPressed: busy ? null : _save,
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
         ],
       ),

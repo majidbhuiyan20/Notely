@@ -1,16 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/constants/app_colors.dart';
 import '../../../core/route/app_route.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../authentication/presentation/providers/auth_providers.dart';
 
-/// First screen a new user sees after the splash. Once they tap "Get
-/// Started" we mark onboarding as completed (so it won't show again) and
-/// navigate to the Login screen.
-///
-/// [_busy] is a local UI-only flag (spinner vs button label) — we keep
-/// it in a [ValueNotifier] rather than calling `setState` so toggling
-/// it doesn't trigger a full widget rebuild and can't race with parent
-/// rebuilds.
+/// First screen a new user sees after the splash. Premium onboarding —
+/// gradient backdrop, soft shadows, animated gradient button.
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
 
@@ -33,8 +30,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     try {
       await ref.read(authRepositoryProvider).markOnboardingComplete();
       if (!mounted) return;
-      // Drop the splash + onboarding from the back-stack so the user
-      // can't pop back into them.
       Navigator.pushNamedAndRemoveUntil(
         context,
         Routes.loginRoute,
@@ -48,71 +43,129 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Spacer(),
-              Image.asset(
-                'assets/images/onboarding_one.png',
-                fit: BoxFit.contain,
-              ),
-              const SizedBox(height: 48),
-              const Text(
-                'World’s Safest And Largest Digital Notebook',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF1E1E1E),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFFF6F7FB),
+              Color(0xFFEDE9FE),
+            ],
+          ),
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(28, 24, 28, 24),
+            child: Column(
+              children: [
+                const Spacer(),
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.9),
+                    borderRadius: BorderRadius.circular(AppRadius.xl),
+                    boxShadow: AppElevation.cardShadow,
+                  ),
+                  padding: const EdgeInsets.all(20),
+                  child: Image.asset(
+                    'assets/images/onboarding_one.png',
+                    fit: BoxFit.contain,
+                    height: 240,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Notely is the world’s safest and largest digital notebook, providing you with a space to write and store all your notes.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey,
-                  height: 1.5,
-                ),
-              ),
-              const Spacer(),
-              ValueListenableBuilder<bool>(
-                valueListenable: _busy,
-                builder: (context, busy, _) {
-                  return ElevatedButton(
-                    onPressed: busy ? null : _onGetStarted,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFD9E9FF),
-                      foregroundColor: Colors.blue,
-                      minimumSize: const Size(double.infinity, 56),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      elevation: 0,
+                const SizedBox(height: 36),
+                ShaderMask(
+                  shaderCallback: (rect) =>
+                      kHeroGradient.createShader(rect),
+                  child: const Text(
+                    "Notely",
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 4,
+                      color: Colors.white,
                     ),
-                    child: busy
-                        ? const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(strokeWidth: 2.5),
-                          )
-                        : const Text(
-                            'GET STARTED',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Your premium space for ideas',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                    letterSpacing: -0.6,
+                    height: 1.15,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  'Write, organise and store every thought with beautiful attachments, '
+                  'smart categories and offline-first sync.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: AppColors.textSecondary,
+                    height: 1.55,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const Spacer(),
+                ValueListenableBuilder<bool>(
+                  valueListenable: _busy,
+                  builder: (context, busy, _) {
+                    return Container(
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: AppColors.brandGradient,
+                        ),
+                        borderRadius:
+                            BorderRadius.circular(AppRadius.pill),
+                        boxShadow: AppElevation.brandGlow,
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius:
+                              BorderRadius.circular(AppRadius.pill),
+                          onTap: busy ? null : _onGetStarted,
+                          child: SizedBox(
+                            width: double.infinity,
+                            height: 58,
+                            child: Center(
+                              child: busy
+                                  ? const SizedBox(
+                                      width: 22,
+                                      height: 22,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2.5,
+                                        valueColor:
+                                            AlwaysStoppedAnimation(
+                                          Colors.white,
+                                        ),
+                                      ),
+                                    )
+                                  : const Text(
+                                      'GET STARTED',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: 1.4,
+                                      ),
+                                    ),
                             ),
                           ),
-                  );
-                },
-              ),
-              const SizedBox(height: 24),
-            ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 24),
+              ],
+            ),
           ),
         ),
       ),

@@ -21,8 +21,6 @@ class NoteList extends ConsumerWidget {
     this.scrollHorizontal = false,
   });
 
-  /// When true, reads from [pinnedNotesProvider]. When false, reads from
-  /// the full notes list.
   final bool pinned;
 
   /// When true, renders the notes as a horizontal scroller instead of a
@@ -34,7 +32,6 @@ class NoteList extends ConsumerWidget {
     final all = ref.watch(notesListProvider);
     final filtered = ref.watch(filteredNotesProvider);
 
-    // Apply search filter if any. `filtered == null` means "no filter".
     final source = filtered ?? all;
     final list = pinned
         ? _filterPinned(source)
@@ -52,7 +49,7 @@ class NoteList extends ConsumerWidget {
           physics: const BouncingScrollPhysics(),
           padding: EdgeInsets.zero,
           itemCount: list.length,
-          separatorBuilder: (_, __) => const SizedBox(width: 12),
+          separatorBuilder: (_, idx) => const SizedBox(width: 12),
           itemBuilder: (_, i) => SizedBox(
             width: 280,
             child: _NoteCard(note: list[i]),
@@ -97,35 +94,51 @@ class _NoteCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final accent = note.categoryColor;
+    final completed = note.status == NoteStatus.completed;
+
     return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
-      elevation: 1,
-      shadowColor: Colors.black.withValues(alpha: 0.04),
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(AppRadius.lg),
+      elevation: 0,
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
         onTap: () => Navigator.pushNamed(
           context,
           Routes.taskRoute,
           arguments: note.id,
         ),
         onLongPress: () => showNoteActionsSheet(context, note),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            boxShadow: AppElevation.cardShadow,
+          ),
+          padding: const EdgeInsets.all(14),
           child: Row(
             children: [
               Container(
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(14),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      accent.withValues(alpha: 0.18),
+                      accent.withValues(alpha: 0.08),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(AppRadius.md),
                 ),
-                child: Icon(accent == AppColors.royalBlue
-                    ? Icons.note_alt_outlined
-                    : note.categoryIcon),
-              ).withPin(note.isPinned),
-              const SizedBox(width: 12),
+                child: Icon(
+                  accent == AppColors.royalBlue
+                      ? Icons.note_alt_outlined
+                      : note.categoryIcon,
+                  color: accent,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -139,51 +152,59 @@ class _NoteCard extends ConsumerWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              color: const Color(0xFF1E1E1E),
-                              decoration: note.status == NoteStatus.completed
+                              fontSize: 15.5,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.textPrimary,
+                              decoration: completed
                                   ? TextDecoration.lineThrough
                                   : null,
-                              decorationColor: Colors.grey.shade400,
+                              decorationColor: AppColors.textTertiary,
+                              letterSpacing: -0.2,
                             ),
                           ),
                         ),
-                        if (note.isPinned) ...[
-                          const SizedBox(width: 6),
-                          const Icon(
-                            Icons.push_pin_rounded,
-                            size: 14,
-                            color: Color(0xFF4169E1),
+                        if (note.isPinned)
+                          const Padding(
+                            padding: EdgeInsets.only(left: 6),
+                            child: Icon(
+                              Icons.push_pin_rounded,
+                              size: 14,
+                              color: AppColors.brandPrimary,
+                            ),
                           ),
-                        ],
                       ],
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 4),
                     Text(
-                      note.dueDate.isEmpty ? 'Recently' : note.dueDate,
+                      note.dueDate.isEmpty ? 'No due date' : note.dueDate,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey.shade500,
-                        fontWeight: FontWeight.w500,
+                        fontSize: 12.5,
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
                 ),
               ),
+              const SizedBox(width: 8),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(20),
+                  color: accent.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
                 ),
                 child: Text(
                   note.category,
                   style: TextStyle(
                     fontSize: 11,
                     color: accent,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.2,
                   ),
                 ),
               ),
@@ -198,9 +219,6 @@ class _NoteCard extends ConsumerWidget {
 class _EmptyList extends StatelessWidget {
   const _EmptyList({required this.pinned, this.query = false});
   final bool pinned;
-
-  /// True when the empty state is the result of a search that matched
-  /// nothing (rather than an actually empty list).
   final bool query;
 
   @override
@@ -211,71 +229,41 @@ class _EmptyList extends StatelessWidget {
       text = 'No notes match your search.';
       icon = Icons.search_off_rounded;
     } else if (pinned) {
-      text = 'Long-press any note and choose Pin to top to surface it here.';
+      text =
+          'Long-press any note and choose Pin to top to surface it here.';
       icon = Icons.push_pin_outlined;
     } else {
       text = 'No notes yet — tap + to add your first one!';
       icon = Icons.note_alt_outlined;
     }
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+      padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        boxShadow: AppElevation.cardShadow,
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
             icon,
-            color: Colors.grey.shade400,
-            size: 18,
+            color: AppColors.textTertiary,
+            size: 20,
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 10),
           Flexible(
             child: Text(
               text,
-              style: TextStyle(
-                fontSize: 13,
-                color: Colors.grey.shade600,
+              style: const TextStyle(
+                fontSize: 13.5,
+                color: AppColors.textSecondary,
                 fontWeight: FontWeight.w600,
               ),
             ),
           ),
         ],
       ),
-    );
-  }
-}
-
-extension on Widget {
-  /// Returns a stack with a small pin badge overlaid on the top-right
-  /// corner of this widget. Used to mark pinned tiles in the list.
-  Widget withPin(bool pinned) {
-    if (!pinned) return this;
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        this,
-        Positioned(
-          right: -4,
-          top: -4,
-          child: Container(
-            width: 18,
-            height: 18,
-            decoration: BoxDecoration(
-              color: const Color(0xFF4169E1),
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 2),
-            ),
-            child: const Icon(
-              Icons.push_pin_rounded,
-              size: 9,
-              color: Colors.white,
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

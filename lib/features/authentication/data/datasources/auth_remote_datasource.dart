@@ -82,6 +82,22 @@ class AuthRemoteDataSource {
     }
   }
 
+  /// Anonymous sign-in. Doesn't collect any user info and doesn't require
+  /// Google. Returns an [AuthUser] with the same shape as a Google one
+  /// (uid + display name "Guest") so the rest of the app doesn't care.
+  Future<AuthUser> signInAnonymously() async {
+    try {
+      final cred = await _auth.signInAnonymously();
+      final user = cred.user;
+      if (user == null) {
+        throw const AuthFailure('Firebase returned no user.');
+      }
+      return _toModel(user);
+    } on fb.FirebaseAuthException catch (e) {
+      throw AuthFailure(e.message ?? 'Anonymous sign-in failed.');
+    }
+  }
+
   /// Signs out from both Google and Firebase. Errors are swallowed because
   /// sign-out is best-effort; we'll still clear the local cache.
   Future<void> signOut() async {

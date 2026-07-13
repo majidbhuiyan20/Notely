@@ -44,6 +44,13 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
+  Future<AuthUser> signInAnonymously() async {
+    final user = await _remote.signInAnonymously();
+    await _local.writeUser(AuthUserModel.fromEntity(user));
+    return user;
+  }
+
+  @override
   Future<void> signOut() async {
     await _remote.signOut();
     await _local.clearUser();

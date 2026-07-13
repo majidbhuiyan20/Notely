@@ -80,7 +80,8 @@ class TaskRow {
       title: (row['title'] as String?) ?? '',
       description: (row['description'] as String?) ?? '',
       category: (row['category'] as String?) ?? '',
-      colorValue: (row['color_value'] as int?) ?? AppColors.royalBlue.toARGB32(),
+      colorValue: (row['color_value'] as int?) ??
+          AppColors.royalBlue.toARGB32(),
       iconCodePoint: (row['icon_code_point'] as int?) ??
           Icons.note_alt_outlined.codePoint,
       statusIndex: (row['status_index'] as int?) ?? 0,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/constants/app_colors.dart';
 import '../../../core/route/app_route.dart';
 import '../../category/model/category_model.dart';
 import '../../task/model/note_data.dart';
@@ -35,7 +36,7 @@ class HomeScreen extends ConsumerWidget {
     final categories = _categoriesWithCounts(notes);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppColors.background,
       body: SafeArea(
         bottom: false,
         child: ListView(

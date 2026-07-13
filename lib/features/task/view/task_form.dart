@@ -1,21 +1,17 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/date_formatter.dart';
 import '../model/note_data.dart';
 import '../widgets/category_selector.dart';
 import '../widgets/checklist_editor.dart';
-import '../widgets/edit_field_card.dart';
 import '../widgets/priority_selector.dart';
 
-/// Shared form body used by both Create and Edit task screens. Keeps the
-/// layout, controllers, checklist state and Save button in a single place so
-/// the screens stay in sync visually.
-///
-/// The controller is a [ChangeNotifier] rather than a bare class with an
-/// `onChanged` callback so consumers can `addListener` (or use it as a
-/// Riverpod-like notifier) without each parent having to wire a
-/// `setState` lambda and risk mid-frame rebuilds.
+/// State container for the note form. Holds all controllers + per-field
+/// values so the parent screen stays stateless and rebuilds can be
+/// driven by a single [ListenableBuilder].
 class TaskFormController extends ChangeNotifier {
   TaskFormController({
     String? title,
@@ -183,11 +179,14 @@ class TaskFormResult {
   final List<ChecklistItemModel> checklist;
 }
 
+/// Premium form body. Uses the new AppColors/AppRadius tokens. Stacked
+/// cards on a tinted background.
 class TaskFormBody extends StatelessWidget {
   const TaskFormBody({
     super.key,
     required this.controller,
-    this.padding = const EdgeInsets.fromLTRB(16, 8, 16, 32),
+    this.padding =
+        const EdgeInsets.fromLTRB(20, 8, 20, 120),
   });
 
   final TaskFormController controller;
@@ -195,195 +194,277 @@ class TaskFormBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = AppColors.royalBlue;
-    // Listen to controller changes (text edits, category picks, checklist
-    // add/remove) so the body stays in sync without each parent wiring
-    // its own `setState` callback. The `_TaskFormBodyListener` does the
-    // actual rebuild — `build` itself stays pure.
-    return _TaskFormBodyListener(
-      controller: controller,
-      child: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        padding: padding,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _TitleCard(
-              controller: controller.titleController,
-              accent: accent,
-            ),
-            const SizedBox(height: 16),
-            EditFieldCard(
-              label: 'CATEGORY',
-              child: CategorySelector(
-                initialCategory: controller.category,
-                onCategorySelected: controller.setCategory,
-              ),
-            ),
-            const SizedBox(height: 16),
-            EditFieldCard(
-              label: 'DESCRIPTION',
-              child: TextField(
-                controller: controller.descriptionController,
-                maxLines: 6,
-                minLines: 4,
-                style: const TextStyle(
-                  fontSize: 15,
-                  color: Color(0xFF1E1E1E),
-                  height: 1.45,
-                  fontWeight: FontWeight.w400,
-                ),
-                decoration: InputDecoration(
-                  hintText: 'Write your thoughts...',
-                  hintStyle: TextStyle(
-                    color: Colors.grey.shade400,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w400,
-                  ),
-                  border: InputBorder.none,
-                  isCollapsed: true,
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            EditFieldCard(
-              label: 'PRIORITY',
-              child: PrioritySelector(
-                initialPriority: controller.priority,
-                onPrioritySelected: controller.setPriority,
-              ),
-            ),
-            const SizedBox(height: 16),
-            _DueDateRow(
-              date: controller.dueDate,
-              time: controller.dueTime,
-              onDateChanged: controller.setDueDate,
-              onTimeChanged: controller.setDueTime,
-            ),
-            const SizedBox(height: 16),
-            ChecklistEditor(
-              checklist: controller.checklist,
-              controllers: controller.itemControllers,
-              focusNodes: controller.itemFocusNodes,
-              focusedItemId: controller.focusedItemId,
-              onToggle: controller.toggleItem,
-              onAdd: controller.addItem,
-              onRemove: controller.removeItem,
-              onTextChanged: controller.onItemTextChanged,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Subscribes to a [TaskFormController] and rebuilds when it changes.
-/// Why this exists: controllers like [_TitleCard] and [CategorySelector]
-/// were previously driven by an `onChanged` callback that called
-/// `setState` on the parent — a pattern that races with Riverpod's
-/// provider-driven rebuild chain. Using a [Listenable] + [ListenableBuilder]
-/// keeps the rebuild scoped to this widget and avoids racing with parent
-/// rebuilds.
-class _TaskFormBodyListener extends StatelessWidget {
-  const _TaskFormBodyListener({
-    required this.controller,
-    required this.child,
-  });
-
-  final TaskFormController controller;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
     return ListenableBuilder(
       listenable: controller,
-      builder: (context, _) => child,
+      builder: (context, _) {
+        return SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          padding: padding,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const _FormHeader(),
+              const SizedBox(height: AppSpacing.lg),
+              const _SectionLabel('Title'),
+              const SizedBox(height: AppSpacing.xs),
+              _FormCard(
+                child: _TitleField(controller: controller.titleController),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              const _SectionLabel('Description'),
+              const SizedBox(height: AppSpacing.xs),
+              _FormCard(
+                child: _DescriptionField(
+                  controller: controller.descriptionController,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              const _SectionLabel('Category'),
+              const SizedBox(height: AppSpacing.xs),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: CategorySelector(
+                  initialCategory: controller.category,
+                  onCategorySelected: controller.setCategory,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              const _SectionLabel('Priority'),
+              const SizedBox(height: AppSpacing.xs),
+              _FormCard(
+                padding: const EdgeInsets.all(6),
+                child: PrioritySelector(
+                  initialPriority: controller.priority,
+                  onPrioritySelected: controller.setPriority,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              const _SectionLabel('Schedule'),
+              const SizedBox(height: AppSpacing.xs),
+              _DueDateCard(
+                date: controller.dueDate,
+                time: controller.dueTime,
+                onDateChanged: controller.setDueDate,
+                onTimeChanged: controller.setDueTime,
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              const _SectionLabel('Checklist'),
+              const SizedBox(height: AppSpacing.xs),
+              Container(
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                  boxShadow: AppElevation.cardShadow,
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: ChecklistEditor(
+                  checklist: controller.checklist,
+                  controllers: controller.itemControllers,
+                  focusNodes: controller.itemFocusNodes,
+                  focusedItemId: controller.focusedItemId,
+                  onToggle: controller.toggleItem,
+                  onAdd: controller.addItem,
+                  onRemove: controller.removeItem,
+                  onTextChanged: controller.onItemTextChanged,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xxl),
+            ],
+          ),
+        );
+      },
     );
   }
 }
 
-class _TitleCard extends StatelessWidget {
-  const _TitleCard({required this.controller, required this.accent});
-  final TextEditingController controller;
-  final Color accent;
+/// Eye-catching top block with category colour swatch and date stamp.
+/// Anchors the screen visually so it doesn't feel like a form dump.
+class _FormHeader extends StatelessWidget {
+  const _FormHeader();
 
   @override
   Widget build(BuildContext context) {
-    return EditFieldCard(
-      label: 'TITLE',
-      child: TextField(
-        controller: controller,
+    final now = DateTime.now();
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        gradient: kHeroGradient,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        boxShadow: AppElevation.brandGlow,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.18),
+              borderRadius: BorderRadius.circular(AppRadius.md),
+            ),
+            child: const Icon(
+              Icons.edit_note_rounded,
+              size: 28,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${months[now.month - 1]} ${now.day}, ${now.year}',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.85),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12.5,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Capture your idea',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4),
+      child: Text(
+        text.toUpperCase(),
         style: const TextStyle(
-          fontSize: 22,
-          fontWeight: FontWeight.w800,
-          color: Color(0xFF1E1E1E),
-          letterSpacing: -0.4,
-        ),
-        maxLines: 2,
-        minLines: 1,
-        decoration: InputDecoration(
-          hintText: 'Untitled Note',
-          hintStyle: TextStyle(
-            color: Colors.grey.shade400,
-            fontSize: 22,
-            fontWeight: FontWeight.w700,
-          ),
-          border: InputBorder.none,
-          isCollapsed: true,
-          contentPadding: const EdgeInsets.symmetric(vertical: 4),
+          fontSize: 11,
+          letterSpacing: 1.4,
+          fontWeight: FontWeight.w700,
+          color: AppColors.textTertiary,
         ),
       ),
     );
   }
 }
 
-class TaskFormSaveButton extends StatelessWidget {
-  const TaskFormSaveButton({
-    super.key,
-    required this.label,
-    required this.onPressed,
-  });
-  final String label;
-  final VoidCallback? onPressed;
+class _FormCard extends StatelessWidget {
+  const _FormCard({required this.child, this.padding});
+  final Widget child;
+  final EdgeInsetsGeometry? padding;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
+    return Container(
       width: double.infinity,
-      height: 56,
-      child: ElevatedButton(
-        onPressed: onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.royalBlue,
-          foregroundColor: Colors.white,
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
+      padding: padding,
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        boxShadow: AppElevation.cardShadow,
+      ),
+      child: child,
+    );
+  }
+}
+
+class _TitleField extends StatelessWidget {
+  const _TitleField({required this.controller});
+  final TextEditingController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      maxLines: 2,
+      minLines: 1,
+      style: const TextStyle(
+        fontSize: 20,
+        fontWeight: FontWeight.w800,
+        color: AppColors.textPrimary,
+        letterSpacing: -0.4,
+        height: 1.3,
+      ),
+      decoration: InputDecoration(
+        hintText: 'What is this note about?',
+        hintStyle: TextStyle(
+          color: AppColors.textTertiary.withValues(alpha: 0.85),
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
         ),
-        child: Text(
-          label,
-          style: const TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0.8,
-          ),
+        border: InputBorder.none,
+        isCollapsed: true,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.md,
         ),
+        filled: false,
+        counterText: '',
       ),
     );
   }
 }
 
-/// iOS-style tappable rows for the date + (optional) time of a note.
-///
-/// After the user picks a date, an "Add a time?" confirm sheet appears.
-/// Saying yes opens `showTimePicker`; saying no keeps the task all-day.
-/// The date is required to set a time — clearing the date also clears
-/// the time.
-class _DueDateRow extends StatelessWidget {
-  const _DueDateRow({
+class _DescriptionField extends StatelessWidget {
+  const _DescriptionField({required this.controller});
+  final TextEditingController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      maxLines: 10,
+      minLines: 5,
+      textInputAction: TextInputAction.newline,
+      keyboardType: TextInputType.multiline,
+      style: const TextStyle(
+        fontSize: 15,
+        color: AppColors.textPrimary,
+        height: 1.55,
+        fontWeight: FontWeight.w500,
+      ),
+      decoration: InputDecoration(
+        hintText:
+            'Write your thoughts, meeting notes, or anything worth keeping…',
+        hintStyle: TextStyle(
+          color: AppColors.textTertiary.withValues(alpha: 0.85),
+          fontSize: 15,
+          fontWeight: FontWeight.w500,
+          height: 1.55,
+        ),
+        border: InputBorder.none,
+        isCollapsed: true,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.md,
+        ),
+        filled: false,
+      ),
+    );
+  }
+}
+
+/// Tappable rows for date + optional time, on a premium card.
+class _DueDateCard extends StatelessWidget {
+  const _DueDateCard({
     required this.date,
     required this.time,
     required this.onDateChanged,
@@ -398,300 +479,114 @@ class _DueDateRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasDate = date != null;
-    return Column(
-      children: [
-        EditFieldCard(
-          label: 'DUE DATE',
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  hasDate ? _formatDate(date!) : 'No due date',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: hasDate
-                        ? const Color(0xFF1E1E1E)
-                        : Colors.grey.shade500,
-                  ),
-                ),
-              ),
-              if (hasDate)
-                GestureDetector(
-                  onTap: () => onDateChanged(null),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 6),
-                    child: Text(
-                      'Clear',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.grey.shade500,
-                      ),
-                    ),
-                  ),
-                ),
-              GestureDetector(
-                onTap: () => _pickDate(context),
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: AppColors.royalBlue.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    hasDate ? 'Change' : 'Set date',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.royalBlue,
-                    ),
-                  ),
-                ),
-              ),
-            ],
+    final hasTime = time.isNotEmpty;
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        boxShadow: AppElevation.cardShadow,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          _Row(
+            icon: Icons.event_outlined,
+            label: 'Date',
+            value: hasDate ? _formatDate(date!) : 'No due date',
+            placeholder: !hasDate,
+            onTap: () => _pickDate(context),
+            onClear: hasDate ? () => onDateChanged(null) : null,
           ),
-        ),
-        if (hasDate) ...[
-          const SizedBox(height: 10),
-          EditFieldCard(
-            label: 'TIME',
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    time.isEmpty
-                        ? 'No time set (all-day)'
-                        : DateFormatter.formatTime12h(time),
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: time.isEmpty
-                          ? Colors.grey.shade500
-                          : const Color(0xFF1E1E1E),
-                    ),
-                  ),
-                ),
-                if (time.isNotEmpty)
-                  GestureDetector(
-                    onTap: () => onTimeChanged(''),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 6),
-                      child: Text(
-                        'Clear',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.grey.shade500,
-                        ),
-                      ),
-                    ),
-                  ),
-                GestureDetector(
-                  onTap: () => _pickTime(context),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: AppColors.royalBlue.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      time.isEmpty ? 'Add time' : 'Change',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.royalBlue,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+          const _Divider(),
+          _Row(
+            icon: Icons.schedule_outlined,
+            label: 'Time',
+            value:
+                hasTime ? DateFormatter.formatTime12h(time) : 'All day',
+            placeholder: !hasTime,
+            onTap: hasDate ? () => _pickTime(context) : null,
+            onClear: hasTime ? () => onTimeChanged('') : null,
           ),
         ],
-      ],
+      ),
     );
   }
 
   Future<void> _pickDate(BuildContext context) async {
     final wasEmpty = date == null;
     final initial = date ?? DateTime.now();
-    DateTime selected = DateTime(initial.year, initial.month, initial.day);
+    DateTime selected =
+        DateTime(initial.year, initial.month, initial.day);
 
     final picked = await showModalBottomSheet<DateTime>(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) {
-        return SafeArea(
-          top: false,
-          child: SizedBox(
-            height: 320,
-            child: Column(
-              children: [
-                const SizedBox(height: 12),
-                Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Expanded(
-                  child: CupertinoDatePicker(
-                    mode: CupertinoDatePickerMode.date,
-                    initialDateTime: selected,
-                    minimumYear: DateTime.now().year - 2,
-                    maximumYear: DateTime.now().year + 5,
-                    onDateTimeChanged: (d) =>
-                        selected = DateTime(d.year, d.month, d.day),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.of(ctx).pop(selected),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.royalBlue,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                      child: const Text(
-                        'Done',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.4,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-
-    if (picked == null) return;
-    onDateChanged(picked);
-
-    // Auto-prompt for a time whenever the user picks a brand-new date
-    // and the existing entry had no time yet (or was empty before).
-    if (wasEmpty && time.isEmpty && context.mounted) {
-      await _maybeAskForTime(context);
-    }
-  }
-
-  Future<void> _maybeAskForTime(BuildContext context) async {
-    final ask = await showModalBottomSheet<bool>(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppRadius.xl),
+        ),
       ),
       builder: (ctx) => SafeArea(
         top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+        child: SizedBox(
+          height: 340,
           child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  vertical: AppSpacing.md,
                 ),
-              ),
-              const SizedBox(height: 18),
-              const Text(
-                'Add a time?',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF1E1E1E),
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Schedules the note on your calendar at a specific hour.',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: Colors.grey.shade600,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 18),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.of(ctx).pop(false),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF1E1E1E),
-                        side: BorderSide(color: Colors.grey.shade300),
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
+                child: Text(
+                  'Pick a date',
+                  style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
                       ),
-                      child: const Text(
-                        'Skip',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w800,
-                        ),
+                ),
+              ),
+              Expanded(
+                child: CupertinoDatePicker(
+                  mode: CupertinoDatePickerMode.date,
+                  initialDateTime: selected,
+                  minimumYear: DateTime.now().year - 2,
+                  maximumYear: DateTime.now().year + 5,
+                  onDateTimeChanged: (d) =>
+                      selected = DateTime(d.year, d.month, d.day),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg,
+                  AppSpacing.xs,
+                  AppSpacing.lg,
+                  AppSpacing.lg,
+                ),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 54,
+                  child: FilledButton(
+                    style: FilledButton.styleFrom(
+                      shape: RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius.circular(AppRadius.pill),
                       ),
                     ),
+                    onPressed: () => Navigator.of(ctx).pop(selected),
+                    child: const Text('Set date'),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.of(ctx).pop(true),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.royalBlue,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                      child: const Text(
-                        'Pick time',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ],
           ),
         ),
       ),
     );
-    if (ask != true || !context.mounted) return;
-    await _pickTime(context);
+
+    if (picked == null) return;
+    onDateChanged(picked);
+
+    if (wasEmpty && time.isEmpty && context.mounted) {
+      HapticFeedback.lightImpact();
+    }
   }
 
   Future<void> _pickTime(BuildContext context) async {
@@ -726,5 +621,156 @@ class _DueDateRow extends StatelessWidget {
     if (delta == -1) return 'Yesterday ($base)';
     if (delta > 0) return '$base • in $delta days';
     return '$base • ${-delta} days ago';
+  }
+}
+
+class _Row extends StatelessWidget {
+  const _Row({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.placeholder,
+    required this.onTap,
+    required this.onClear,
+  });
+  final IconData icon;
+  final String label;
+  final String value;
+  final bool placeholder;
+  final VoidCallback? onTap;
+  final VoidCallback? onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg,
+          vertical: AppSpacing.md,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: AppColors.brandPrimary.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+              ),
+              child: Icon(
+                icon,
+                size: 18,
+                color: AppColors.brandPrimary,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.2,
+                      color: AppColors.textTertiary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    value,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: placeholder
+                          ? AppColors.textTertiary
+                          : AppColors.textPrimary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (onClear != null)
+              InkResponse(
+                onTap: onClear,
+                radius: 18,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  child: Icon(
+                    Icons.close_rounded,
+                    size: 16,
+                    color: AppColors.textTertiary,
+                  ),
+                ),
+              )
+            else
+              Icon(
+                Icons.chevron_right_rounded,
+                color: AppColors.textTertiary,
+                size: 22,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Divider extends StatelessWidget {
+  const _Divider();
+  @override
+  Widget build(BuildContext context) => const Padding(
+        padding: EdgeInsets.only(left: AppSpacing.lg + 38 + AppSpacing.md),
+        child: Divider(height: 1, color: AppColors.divider),
+      );
+}
+
+/// Premium gradient pill save button.
+class TaskFormSaveButton extends StatelessWidget {
+  const TaskFormSaveButton({
+    super.key,
+    required this.label,
+    required this.onPressed,
+  });
+  final String label;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: AppColors.brandGradient,
+        ),
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        boxShadow: AppElevation.brandGlow,
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          onTap: onPressed,
+          child: SizedBox(
+            width: double.infinity,
+            height: 58,
+            child: Center(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 15,
+                  letterSpacing: 1.2,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

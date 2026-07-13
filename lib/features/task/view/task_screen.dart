@@ -15,12 +15,6 @@ import '../widgets/task_meta_section.dart';
 /// Read-only detail view of a single note. Reads from the live
 /// [tasksProvider] so any edit made in [EditTaskScreen] is reflected
 /// here automatically. Offers Edit and Delete actions in the app bar.
-///
-/// Checklist toggles mutate the in-memory `note.checklist` then call
-/// [TasksNotifier.upsert]; the resulting provider rebuild is what
-/// updates the UI. We don't `setState` here — that previously raced
-/// with the Riverpod rebuild chain and produced `setState() or
-/// markNeedsBuild() called during build`.
 class TaskScreen extends ConsumerStatefulWidget {
   const TaskScreen({super.key, this.noteId});
   final String? noteId;
@@ -30,7 +24,6 @@ class TaskScreen extends ConsumerStatefulWidget {
 }
 
 class _TaskScreenState extends ConsumerState<TaskScreen> {
-  /// Local-only debounce flag — see [_persistChecklistChange].
   bool _savingChecklist = false;
 
   NoteData? _resolve(List<NoteData> notes) {
@@ -44,8 +37,6 @@ class _TaskScreenState extends ConsumerState<TaskScreen> {
 
   Future<void> _toggleChecklist(NoteData note, int index) async {
     note.checklist[index].isChecked = !note.checklist[index].isChecked;
-    // No `setState` — the upsert below re-emits the tasks list and
-    // Riverpod rebuilds this screen with the new state.
     await _persistChecklistChange(note);
   }
 
@@ -79,7 +70,9 @@ class _TaskScreenState extends ConsumerState<TaskScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+        ),
         title: const Text('Delete note?'),
         content: Text(
           '"${note.title}" will be permanently deleted from this device '
@@ -106,7 +99,8 @@ class _TaskScreenState extends ConsumerState<TaskScreen> {
   }
 
   Future<void> _togglePin(NoteData note) async {
-    final updated = await ref.read(tasksProvider.notifier).togglePin(note.id);
+    final updated =
+        await ref.read(tasksProvider.notifier).togglePin(note.id);
     if (!mounted || updated == null) return;
     AppSnackbar.info(
       context,
@@ -121,14 +115,14 @@ class _TaskScreenState extends ConsumerState<TaskScreen> {
 
     if (note == null) {
       return Scaffold(
-        backgroundColor: const Color(0xFFF2F2F7),
+        backgroundColor: AppColors.background,
         appBar: const NotelyAppBar(title: 'Note Details'),
         body: const Center(
           child: Text(
             'Note not found',
             style: TextStyle(
               fontSize: 16,
-              color: Colors.black54,
+              color: AppColors.textSecondary,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -137,7 +131,7 @@ class _TaskScreenState extends ConsumerState<TaskScreen> {
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF2F2F7),
+      backgroundColor: AppColors.background,
       appBar: NotelyAppBar(
         title: 'Note Details',
         actions: [
@@ -148,22 +142,28 @@ class _TaskScreenState extends ConsumerState<TaskScreen> {
                   ? Icons.push_pin_rounded
                   : Icons.push_pin_outlined,
               color: note.isPinned
-                  ? AppColors.royalBlue
-                  : const Color(0xFF1E1E1E),
+                  ? AppColors.brandPrimary
+                  : AppColors.textPrimary,
               size: 22,
             ),
             tooltip: note.isPinned ? 'Unpin' : 'Pin to top',
           ),
           IconButton(
             onPressed: _openEdit,
-            icon: const Icon(Icons.edit_outlined,
-                color: Color(0xFF1E1E1E), size: 22),
+            icon: const Icon(
+              Icons.edit_outlined,
+              color: AppColors.textPrimary,
+              size: 22,
+            ),
             tooltip: 'Edit',
           ),
           IconButton(
             onPressed: () => _confirmDelete(note),
-            icon: const Icon(Icons.delete_outline_rounded,
-                color: AppColors.error, size: 22),
+            icon: const Icon(
+              Icons.delete_outline_rounded,
+              color: AppColors.error,
+              size: 22,
+            ),
             tooltip: 'Delete',
           ),
           const SizedBox(width: 8),
@@ -171,25 +171,25 @@ class _TaskScreenState extends ConsumerState<TaskScreen> {
       ),
       body: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             TaskHeroCard(note: note, onEdit: _openEdit),
-            const SizedBox(height: 20),
+            const SizedBox(height: AppSpacing.lg),
             TaskMetaSection(note: note),
-            const SizedBox(height: 20),
+            const SizedBox(height: AppSpacing.lg),
             TaskDescriptionSection(note: note),
-            const SizedBox(height: 20),
+            const SizedBox(height: AppSpacing.lg),
             TaskChecklistSection(
               note: note,
               onToggle: (i) => _toggleChecklist(note, i),
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: AppSpacing.xl),
             _MarkAllCompleteButton(
               onPressed: () => _markAllComplete(note),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.md),
           ],
         ),
       ),
@@ -203,26 +203,40 @@ class _MarkAllCompleteButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      height: 56,
-      child: ElevatedButton.icon(
-        onPressed: onPressed,
-        icon: const Icon(Icons.check_rounded, size: 22),
-        label: const Text(
-          'MARK ALL COMPLETE',
-          style: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.6,
-          ),
+    return Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: AppColors.brandGradient,
         ),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.royalBlue,
-          foregroundColor: Colors.white,
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        boxShadow: AppElevation.brandGlow,
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          onTap: onPressed,
+          child: SizedBox(
+            width: double.infinity,
+            height: 58,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: const [
+                Icon(Icons.check_rounded, color: Colors.white, size: 22),
+                SizedBox(width: AppSpacing.xs),
+                Text(
+                  'MARK ALL COMPLETE',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

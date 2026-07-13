@@ -14,6 +14,11 @@ abstract class AuthRepository {
   /// launches can skip the login screen. Throws [AuthFailure] on failure.
   Future<AuthUser> signInWithGoogle();
 
+  /// Signs in anonymously (no email/profile). The returned user has a
+  /// real Firebase uid so notes stay scoped per-device, but the account
+  /// can be upgraded later via a provider link.
+  Future<AuthUser> signInAnonymously();
+
   /// Clears the persisted user and signs out from any underlying providers.
   Future<void> signOut();
 

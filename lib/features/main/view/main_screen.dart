@@ -1,3 +1,6 @@
+import 'dart:math' as math;
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,9 +11,6 @@ import '../../calendar/presentation/view/calendar_screen.dart';
 import '../../home/view/home_screen.dart';
 import '../../profile/view/profile_screen.dart';
 
-/// Tracks which tab in the bottom nav is currently active. Uses
-/// Riverpod 3.x [Notifier] — `StateProvider` isn't exported by
-/// `flutter_riverpod` 3.3.
 class SelectedTabNotifier extends Notifier<int> {
   @override
   int build() => 0;
@@ -21,8 +21,6 @@ class SelectedTabNotifier extends Notifier<int> {
 final selectedTabProvider =
     NotifierProvider<SelectedTabNotifier, int>(SelectedTabNotifier.new);
 
-/// 4-tab bottom nav with a centered floating + button. Uses Material 3
-/// [NavigationBar] so the highlight + animation are platform-correct.
 class MainScreen extends ConsumerWidget {
   const MainScreen({super.key});
 
@@ -40,7 +38,7 @@ class MainScreen extends ConsumerWidget {
     _Destination(
       icon: Icons.insights_outlined,
       activeIcon: Icons.insights_rounded,
-      label: 'Analytics',
+      label: 'Insights',
     ),
     _Destination(
       icon: Icons.person_outline_rounded,
@@ -58,7 +56,10 @@ class MainScreen extends ConsumerWidget {
 
   void _onItemTapped(WidgetRef ref, int index) {
     final current = ref.read(selectedTabProvider);
-    if (current == index) return;
+    if (current == index) {
+      HapticFeedback.selectionClick();
+      return;
+    }
     HapticFeedback.lightImpact();
     ref.read(selectedTabProvider.notifier).set(index);
   }
@@ -66,45 +67,23 @@ class MainScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final selectedIndex = ref.watch(selectedTabProvider);
+
     return Scaffold(
       extendBody: true,
       body: IndexedStack(
         index: selectedIndex,
         children: _screens,
       ),
-      floatingActionButton: const _CreateFab(),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 18,
-              offset: const Offset(0, -4),
-            ),
-          ],
-        ),
-        child: BottomAppBar(
-          color: Colors.white,
-          elevation: 0,
-          height: 78,
-          padding: EdgeInsets.zero,
-          shape: const CircularNotchedRectangle(),
-          notchMargin: 10,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              for (int i = 0; i < _destinations.length; i++) ...[
-                if (i == 2) const SizedBox(width: 72),
-                _NavItem(
-                  destination: _destinations[i],
-                  isActive: selectedIndex == i,
-                  onTap: () => _onItemTapped(ref, i),
-                ),
-              ],
-            ],
-          ),
-        ),
+      floatingActionButtonLocation:
+          FloatingActionButtonLocation.centerDocked,
+      bottomNavigationBar: _IosGlassDock(
+        destinations: _destinations,
+        selectedIndex: selectedIndex,
+        onItemTap: (i) => _onItemTapped(ref, i),
+        onCreateTap: () {
+          HapticFeedback.mediumImpact();
+          Navigator.pushNamed(context, Routes.createTaskRoute);
+        },
       ),
     );
   }
@@ -121,8 +100,180 @@ class _Destination {
   final String label;
 }
 
-class _NavItem extends StatelessWidget {
-  const _NavItem({
+class _IosGlassDock extends StatelessWidget {
+  const _IosGlassDock({
+    required this.destinations,
+    required this.selectedIndex,
+    required this.onItemTap,
+    required this.onCreateTap,
+  });
+
+  final List<_Destination> destinations;
+  final int selectedIndex;
+  final ValueChanged<int> onItemTap;
+  final VoidCallback onCreateTap;
+
+  static const double _dockHeight = 68;
+  static const double _fabSize = 60;
+  static const double _fabNotch = _fabSize + 20;
+
+  @override
+  Widget build(BuildContext context) {
+    final mq = MediaQuery.of(context);
+    final bottomInset = mq.padding.bottom;
+    final bottomPad = math.max(bottomInset, 12.0) + 8.0;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, 0, 16, bottomPad),
+      child: SizedBox(
+        height: _dockHeight,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final totalWidth = constraints.maxWidth;
+            final itemCount = destinations.length;
+            final reservedWidth = _fabNotch;
+            final freeWidth = math.max(0.0, totalWidth - reservedWidth);
+            final slotWidth = freeWidth / itemCount;
+
+            return Stack(
+              alignment: Alignment.center,
+              clipBehavior: Clip.none,
+              children: [
+                Positioned.fill(child: _GlassPill()),
+
+                _HighlightLayer(
+                  reservedWidth: reservedWidth,
+                  slotWidth: slotWidth,
+                  height: _dockHeight,
+                  selectedIndex: selectedIndex,
+                ),
+
+                Row(
+                  children: [
+                    for (int i = 0; i < itemCount; i++) ...[
+                      if (i == 2) SizedBox(width: _fabNotch),
+                      Expanded(
+                        child: _DockItem(
+                          destination: destinations[i],
+                          isActive: selectedIndex == i,
+                          onTap: () => onItemTap(i),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+
+                Positioned(
+                  top: -15,
+                  child: _PremiumFab(onPressed: onCreateTap),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _GlassPill extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
+    final isDark = brightness == Brightness.dark;
+
+    final surface = isDark
+        ? const Color(0xCC1A1C2E)
+        : Colors.white.withValues(alpha: 0.75);
+    final border = isDark
+        ? Colors.white.withValues(alpha: 0.1)
+        : Colors.white.withValues(alpha: 0.5);
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(
+            decoration: BoxDecoration(
+              color: surface,
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: border, width: 1.5),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HighlightLayer extends StatelessWidget {
+  const _HighlightLayer({
+    required this.reservedWidth,
+    required this.slotWidth,
+    required this.height,
+    required this.selectedIndex,
+  });
+
+  final double reservedWidth;
+  final double slotWidth;
+  final double height;
+  final int selectedIndex;
+
+  @override
+  Widget build(BuildContext context) {
+    // Dynamic pill width that fits the slot nicely
+    final pillWidth = slotWidth * 0.85;
+    const pillHeight = 52.0;
+
+    // Fixed math for center alignment
+    final double leftOffset = selectedIndex < 2
+        ? (slotWidth * selectedIndex) + (slotWidth - pillWidth) / 2
+        : (slotWidth * selectedIndex) + reservedWidth + (slotWidth - pillWidth) / 2;
+
+    return AnimatedPositioned(
+      duration: const Duration(milliseconds: 500),
+      curve: Curves.easeOutBack, // Fixed name
+      left: leftOffset,
+      top: (height - pillHeight) / 2,
+      child: Container(
+        width: pillWidth,
+        height: pillHeight,
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF6366F1),
+              Color(0xFF8B5CF6),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF6366F1).withValues(alpha: 0.4),
+              blurRadius: 15,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DockItem extends StatelessWidget {
+  const _DockItem({
     required this.destination,
     required this.isActive,
     required this.onTap,
@@ -134,75 +285,67 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = isActive ? AppColors.royalBlue : Colors.grey.shade500;
-    return InkResponse(
+    final fg = isActive ? Colors.white : AppColors.textTertiary;
+
+    return GestureDetector(
       onTap: onTap,
-      radius: 36,
-      child: SizedBox(
-        width: 64,
-        height: 78,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 220),
-              curve: Curves.easeOut,
-              padding: EdgeInsets.symmetric(
-                horizontal: isActive ? 10 : 0,
-                vertical: 4,
-              ),
-              decoration: BoxDecoration(
-                color: isActive
-                    ? AppColors.royalBlue.withValues(alpha: 0.12)
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Icon(
-                isActive ? destination.activeIcon : destination.icon,
-                size: 22,
-                color: color,
-              ),
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOutCubic,
+            transform: Matrix4.translationValues(0, isActive ? -2 : 0, 0),
+            child: Icon(
+              isActive ? destination.activeIcon : destination.icon,
+              size: 24,
+              color: fg,
             ),
-            const SizedBox(height: 4),
-            Text(
-              destination.label,
-              style: TextStyle(
-                fontSize: 11,
-                color: color,
-                fontWeight: FontWeight.w700,
-              ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            destination.label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: isActive ? FontWeight.w900 : FontWeight.w600,
+              color: fg,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _CreateFab extends StatelessWidget {
-  const _CreateFab();
+class _PremiumFab extends StatelessWidget {
+  const _PremiumFab({required this.onPressed});
+  final VoidCallback onPressed;
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.royalBlue.withValues(alpha: 0.35),
-            blurRadius: 18,
-            spreadRadius: 2,
+    return GestureDetector(
+      onTap: onPressed,
+      child: Container(
+        width: 58,
+        height: 58,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
           ),
-        ],
-      ),
-      child: FloatingActionButton(
-        onPressed: () {
-          HapticFeedback.mediumImpact();
-          Navigator.pushNamed(context, Routes.createTaskRoute);
-        },
-        backgroundColor: AppColors.royalBlue,
-        elevation: 0,
-        shape: const CircleBorder(),
-        child: const Icon(Icons.add_rounded, color: Colors.white, size: 32),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF4F46E5).withValues(alpha: 0.4),
+              blurRadius: 12,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: const Icon(Icons.add_rounded, size: 32, color: Colors.white),
       ),
     );
   }
