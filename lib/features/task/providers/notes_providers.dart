@@ -54,7 +54,12 @@ class TasksNotifier extends AsyncNotifier<List<NoteData>> {
   Future<List<NoteData>> build() async {
     final uid = ref.watch(currentUidProvider);
     _uid = uid;
+    
     if (uid == null) {
+      // Critical fix: instead of AuthNotifier calling TasksNotifier (which 
+      // creates a circular dependency), TasksNotifier cleans up itself 
+      // when it detects a null UID.
+      NotesRepository.instance.replaceAll(const []);
       _cachedForUid = null;
       _cachedAt = null;
       return const [];
@@ -79,8 +84,8 @@ class TasksNotifier extends AsyncNotifier<List<NoteData>> {
   }
 
   /// Pulls from Firestore and replaces the local copy. Intended to be
-  /// called exactly once per sign-in by [AuthNotifier]. The local cache
-  /// is the source of truth for everything else.
+  /// called exactly once per sign-in. The local cache is the source 
+  /// of truth for everything else.
   Future<void> refresh() async {
     final uid = _uid;
     if (uid == null) return;

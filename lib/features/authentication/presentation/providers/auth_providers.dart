@@ -43,9 +43,18 @@ class AuthNotifier extends AsyncNotifier<AuthUser?> {
       final user = await repo.signInWithGoogle();
       state = AsyncValue.data(user);
       // Pull the user's tasks from Firestore and replace the local cache
-      // so the rest of the app sees their data immediately.
-      // ignore: discarded_futures
-      ref.read(tasksProvider.notifier).refresh();
+      // so the rest of the app sees their data immediately. We use a
+      // microtask + ignore so this never re-enters the auth provider's
+      // call stack (which would form a circular dependency, since
+      // tasksProvider → currentUidProvider → authNotifierProvider).
+      Future.microtask(() async {
+        try {
+          await ref.read(tasksProvider.notifier).refresh();
+        } catch (_) {
+          // Refresh failure is non-fatal for sign-in. The next
+          // connectivity edge or app foreground will retry the drain.
+        }
+      });
     } catch (e, st) {
       state = AsyncValue.error(e, st);
     }
@@ -54,10 +63,14 @@ class AuthNotifier extends AsyncNotifier<AuthUser?> {
   Future<void> signOut() async {
     final repo = ref.read(authRepositoryProvider);
     await repo.signOut();
-    // Per product decision: keep local tasks for the next sign-in. We
-    // just clear the in-memory mirror so nothing from the previous user
-    // is shown while the new user is being authenticated.
-    ref.read(tasksProvider.notifier).clearLocal();
+    // Setting `state` to `data(null)` makes `currentUidProvider` flip to
+    // null, which causes `TasksNotifier.build()` to re-run and clear its
+    // in-memory mirror itself (see the `uid == null` branch in
+    // notes_providers.dart). We MUST NOT call
+    // `ref.read(tasksProvider.notifier).clearLocal()` here — that would
+    // form a circular dependency (authNotifierProvider →
+    // tasksProvider → currentUidProvider → authNotifierProvider) and
+    // throw a `CircularDependencyError` mid-sign-out.
     state = const AsyncValue.data(null);
   }
 }

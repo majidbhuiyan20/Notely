@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../authentication/presentation/providers/auth_providers.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/route/app_route.dart';
+import '../../widgets/app_snackbar.dart';
 import '../widgets/category_progress_list.dart';
 import '../widgets/profile_app_bar.dart';
 import '../widgets/profile_section_header.dart';
@@ -17,7 +18,15 @@ import '../widgets/weekly_sparkline_card.dart';
 ///   2. StatsGrid     — Today / Week / Month / Total glass cards.
 ///   3. WeeklySparklineCard — 7-bar activity chart.
 ///   4. Category Progress   — restyled category breakdown.
-///   5. Account tile        — sign-out, restyled.
+///   5. Account tile        — sign-out with confirmation + loading state.
+///
+/// Sign-out is wired reactively: tapping the row triggers a
+/// confirmation dialog, then awaits the auth notifier. Errors are
+/// surfaced via [AppSnackbar]. Navigation to the Login screen happens
+/// whenever the auth state flips to signed-out (handled by a
+/// [ref.listen] in [_ProfileScaffold], not by the button callback) so
+/// the user can't end up stranded on Profile if the sign-out finishes
+/// faster than the navigation call.
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
@@ -28,15 +37,50 @@ class ProfileScreen extends ConsumerWidget {
     final email = user?.email ?? '';
     final photoUrl = user?.photoUrl ?? 'https://picsum.photos/200';
 
+    return _ProfileScaffold(
+      name: name,
+      email: email,
+      photoUrl: photoUrl,
+    );
+  }
+}
+
+/// Wraps the entire profile content in a [ConsumerStatefulWidget] so
+/// we can mount a [ref.listen] on the auth state without rebuilding
+/// the whole screen on every auth tick.
+class _ProfileScaffold extends ConsumerStatefulWidget {
+  const _ProfileScaffold({
+    required this.name,
+    required this.email,
+    required this.photoUrl,
+  });
+
+  final String name;
+  final String email;
+  final String photoUrl;
+
+  @override
+  ConsumerState<_ProfileScaffold> createState() => _ProfileScaffoldState();
+}
+
+class _ProfileScaffoldState extends ConsumerState<_ProfileScaffold> {
+  @override
+  Widget build(BuildContext context) {
+    // Sign-out is driven explicitly from [_confirmAndSignOut] below
+    // (because the user's tap is the explicit intent), not from a
+    // Riverpod listener. We still want a safety net for users on
+    // Home/Calendar/Insights if the session expires mid-use — that's
+    // handled by the listener on [_MainScreenState] in main_screen.dart.
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: CustomScrollView(
         physics: const BouncingScrollPhysics(),
         slivers: [
           ProfileAppBar(
-            name: name,
-            email: email,
-            imageUrl: photoUrl,
+            name: widget.name,
+            email: widget.email,
+            imageUrl: widget.photoUrl,
           ),
           SliverToBoxAdapter(
             child: Padding(
@@ -59,19 +103,9 @@ class ProfileScreen extends ConsumerWidget {
                   const SizedBox(height: AppSpacing.xl),
                   const ProfileSectionHeader(title: 'Account'),
                   const SizedBox(height: AppSpacing.md),
-                  _AccountCard(
-                    email: email,
-                    onSignOut: () async {
-                      await ref
-                          .read(authNotifierProvider.notifier)
-                          .signOut();
-                      if (!context.mounted) return;
-                      Navigator.pushNamedAndRemoveUntil(
-                        context,
-                        Routes.loginRoute,
-                        (_) => false,
-                      );
-                    },
+                  AccountCard(
+                    email: widget.email,
+                    onConfirmSignOut: _confirmAndSignOut,
                   ),
                   const SizedBox(height: 120),
                 ],
@@ -82,18 +116,99 @@ class ProfileScreen extends ConsumerWidget {
       ),
     );
   }
+
+  /// Shows a confirmation dialog, then triggers sign-out. Errors are
+  /// surfaced via a snackbar instead of being swallowed. On success we
+  /// navigate to the Login screen directly here (not via a listener)
+  /// because the user's tap is the explicit intent.
+  Future<void> _confirmAndSignOut() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+        ),
+        title: const Text('Sign out?'),
+        content: const Text(
+          'You\'ll need to sign in again to view your notes. Your local '
+          'notes will be kept for next time.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            child: const Text('Sign out'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      await ref.read(authNotifierProvider.notifier).signOut();
+    } catch (e) {
+      if (!mounted) return;
+      AppSnackbar.error(context, 'Sign out failed: $e');
+      return;
+    }
+
+    if (!mounted) return;
+
+    // Push the Login screen and pop every route below it (which is
+    // MainScreen). Use the root navigator explicitly so this works
+    // even though the trigger originates inside an IndexedStack tab.
+    final navigator = Navigator.of(context, rootNavigator: true);
+    navigator.pushNamedAndRemoveUntil(
+      Routes.loginRoute,
+      (_) => false,
+    );
+  }
 }
 
 /// Account row containing the user's email and a destructive
-/// sign-out action. Restyled with frosted card surface + gradient
-/// icon to match the rest of the screen.
-class _AccountCard extends StatelessWidget {
-  const _AccountCard({required this.email, required this.onSignOut});
+/// sign-out action. Stateful so it can show a spinner while sign-out
+/// is in flight and disable the tap to prevent double-fires.
+///
+/// Exposed (not private) so it can be exported as `AccountCard` if
+/// other screens ever want to reuse it.
+class AccountCard extends StatefulWidget {
+  const AccountCard({
+    super.key,
+    required this.email,
+    required this.onConfirmSignOut,
+  });
+
   final String email;
-  final VoidCallback onSignOut;
+
+  /// Called when the user confirms they want to sign out. The card
+  /// owns its own loading state and disables taps while this future
+  /// is pending — but it does NOT trigger navigation itself.
+  final Future<void> Function() onConfirmSignOut;
+
+  @override
+  State<AccountCard> createState() => _AccountCardState();
+}
+
+class _AccountCardState extends State<AccountCard> {
+  bool _signingOut = false;
+
+  Future<void> _handleTap() async {
+    if (_signingOut) return;
+    setState(() => _signingOut = true);
+    try {
+      await widget.onConfirmSignOut();
+    } finally {
+      if (mounted) setState(() => _signingOut = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final canSignOut = widget.email.isNotEmpty;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -104,7 +219,7 @@ class _AccountCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          if (email.isNotEmpty)
+          if (canSignOut)
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: Row(
@@ -142,7 +257,7 @@ class _AccountCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          email,
+                          widget.email,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
@@ -157,7 +272,7 @@ class _AccountCard extends StatelessWidget {
                 ],
               ),
             ),
-          if (email.isNotEmpty)
+          if (canSignOut)
             Container(
               height: 1,
               margin: const EdgeInsets.only(bottom: 12),
@@ -174,7 +289,7 @@ class _AccountCard extends StatelessWidget {
             color: Colors.transparent,
             borderRadius: BorderRadius.circular(14),
             child: InkWell(
-              onTap: onSignOut,
+              onTap: canSignOut && !_signingOut ? _handleTap : null,
               borderRadius: BorderRadius.circular(14),
               child: Padding(
                 padding: const EdgeInsets.symmetric(
@@ -183,34 +298,68 @@ class _AccountCard extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        color: AppColors.error.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(11),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 220),
+                      transitionBuilder: (child, anim) => FadeTransition(
+                        opacity: anim,
+                        child: ScaleTransition(scale: anim, child: child),
                       ),
-                      child: const Icon(
-                        Icons.logout_rounded,
-                        size: 18,
-                        color: AppColors.error,
-                      ),
+                      child: _signingOut
+                          ? Container(
+                              key: const ValueKey('spinner'),
+                              width: 38,
+                              height: 38,
+                              decoration: BoxDecoration(
+                                color:
+                                    AppColors.error.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(11),
+                              ),
+                              child: const Padding(
+                                padding: EdgeInsets.all(10),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.4,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    AppColors.error,
+                                  ),
+                                ),
+                              ),
+                            )
+                          : Container(
+                              key: const ValueKey('icon'),
+                              width: 38,
+                              height: 38,
+                              decoration: BoxDecoration(
+                                color:
+                                    AppColors.error.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(11),
+                              ),
+                              child: const Icon(
+                                Icons.logout_rounded,
+                                size: 18,
+                                color: AppColors.error,
+                              ),
+                            ),
                     ),
                     const SizedBox(width: AppSpacing.md),
-                    const Expanded(
+                    Expanded(
                       child: Text(
-                        'Sign out',
+                        _signingOut ? 'Signing out…' : 'Sign out',
                         style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w800,
-                          color: AppColors.error,
+                          color: _signingOut
+                              ? AppColors.textSecondary
+                              : AppColors.error,
                           letterSpacing: -0.1,
                         ),
                       ),
                     ),
-                    const Icon(
-                      Icons.chevron_right_rounded,
+                    Icon(
+                      _signingOut
+                          ? Icons.hourglass_top_rounded
+                          : Icons.chevron_right_rounded,
                       color: AppColors.textTertiary,
+                      size: _signingOut ? 16 : 24,
                     ),
                   ],
                 ),

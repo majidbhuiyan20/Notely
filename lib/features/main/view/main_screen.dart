@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/route/app_route.dart';
 import '../../analytics/view/analytics_screen.dart';
+import '../../authentication/presentation/providers/auth_providers.dart';
 import '../../calendar/presentation/view/calendar_screen.dart';
 import '../../home/view/home_screen.dart';
 import '../../profile/view/profile_screen.dart';
@@ -21,8 +22,20 @@ class SelectedTabNotifier extends Notifier<int> {
 final selectedTabProvider =
     NotifierProvider<SelectedTabNotifier, int>(SelectedTabNotifier.new);
 
-class MainScreen extends ConsumerWidget {
+class MainScreen extends ConsumerStatefulWidget {
   const MainScreen({super.key});
+
+  @override
+  ConsumerState<MainScreen> createState() => _MainScreenState();
+}
+
+class _MainScreenState extends ConsumerState<MainScreen> {
+  /// `true` once we've pushed the Login screen in response to a sign-out.
+  /// Used to suppress duplicate navigations if the auth listener fires
+  /// more than once for the same sign-out event. The flag is reset only
+  /// when the widget is rebuilt against a fresh auth state (i.e. the user
+  /// signs back in and reaches Main again — handled by widget disposal).
+  bool _signedOut = false;
 
   static const _destinations = <_Destination>[
     _Destination(
@@ -54,7 +67,7 @@ class MainScreen extends ConsumerWidget {
     ProfileScreen(),
   ];
 
-  void _onItemTapped(WidgetRef ref, int index) {
+  void _onItemTapped(int index) {
     final current = ref.read(selectedTabProvider);
     if (current == index) {
       HapticFeedback.selectionClick();
@@ -65,7 +78,26 @@ class MainScreen extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
+    // If the auth state flips to signed-out while MainScreen is mounted
+    // (the Profile tab's AccountCard drives this explicitly, but we also
+    // listen here so Home / Calendar / Insights users can't be stranded
+    // if their session expires mid-use), redirect to Login exactly once.
+    // The Profile screen handles its own navigation; we use the shared
+    // [_signedOut] flag so this listener doesn't double-fire.
+    ref.listen(authNotifierProvider, (prev, next) {
+      if (_signedOut) return;
+      final wasSignedIn = prev?.value != null;
+      final isSignedOut = next.value == null && !next.isLoading;
+      if (wasSignedIn && isSignedOut && mounted) {
+        _signedOut = true;
+        Navigator.of(context, rootNavigator: true).pushNamedAndRemoveUntil(
+          Routes.loginRoute,
+          (_) => false,
+        );
+      }
+    });
+
     final selectedIndex = ref.watch(selectedTabProvider);
 
     return Scaffold(
@@ -79,7 +111,7 @@ class MainScreen extends ConsumerWidget {
       bottomNavigationBar: _IosGlassDock(
         destinations: _destinations,
         selectedIndex: selectedIndex,
-        onItemTap: (i) => _onItemTapped(ref, i),
+        onItemTap: _onItemTapped,
         onCreateTap: () {
           HapticFeedback.mediumImpact();
           Navigator.pushNamed(context, Routes.createTaskRoute);

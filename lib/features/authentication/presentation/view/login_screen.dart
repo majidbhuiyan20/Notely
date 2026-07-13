@@ -14,19 +14,57 @@ import '../providers/auth_providers.dart';
 /// large Google Sign-In CTA. After a successful sign-in we
 /// push the main app and pop the back-stack so the user can't return to
 /// the login screen with the system back gesture.
-class LoginScreen extends ConsumerWidget {
+class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends ConsumerState<LoginScreen> {
+  /// `true` once we've pushed the Main screen. Used to suppress any
+  /// late-arriving auth-state updates from re-triggering navigation or
+  /// showing duplicate snackbars while the route transition is in
+  /// flight.
+  bool _navigated = false;
+
+  /// `true` while a Google sign-in tap is being processed. Used to
+  /// suppress error snackbars from incidental `AsyncNotifier` rebuilds
+  /// (e.g. `build()` re-running because a dependency was invalidated).
+  /// The user only sees an error snackbar if an error fires *during*
+  /// the active sign-in window.
+  bool _signInInFlight = false;
+
+  @override
+  Widget build(BuildContext context) {
     // Watched solely to trigger rebuilds when auth state changes; the
     // actual state is consumed via [ref.listen] below.
     ref.watch(authNotifierProvider);
 
     ref.listen(authNotifierProvider, (previous, next) {
+      if (_navigated) return;
+
+      // Track whether a sign-in attempt is currently in flight so we
+      // only show an error snackbar when the failure is actually caused
+      // by the user's tap. Otherwise, an AsyncNotifier rebuild could
+      // produce a transient `error` state that has nothing to do with
+      // the user's sign-in flow (e.g. plugins not yet initialised).
+      final wasLoading = previous?.isLoading ?? false;
+      final isLoading = next.isLoading;
+      final hasError = next.hasError;
+      if (isLoading && !wasLoading) {
+        _signInInFlight = true;
+      } else if (!isLoading && wasLoading) {
+        // Sign-in attempt just finished — handle the result below.
+      } else if (!isLoading && !hasError) {
+        // Steady-state, not loading. Reset the in-flight flag.
+        _signInInFlight = false;
+      }
+
       next.whenOrNull(
         data: (user) {
           if (user == null) return;
+          _navigated = true;
           AppSnackbar.success(context, 'Signed in as ${user.firstName}');
           Navigator.pushNamedAndRemoveUntil(
             context,
@@ -35,6 +73,12 @@ class LoginScreen extends ConsumerWidget {
           );
         },
         error: (err, _) {
+          // Only surface sign-in errors. A stray `error` state from the
+          // notifier's `build()` (e.g. shared_preferences not ready yet
+          // at cold start) shouldn't show "could not sign in" — it has
+          // nothing to do with the user's action.
+          if (!_signInInFlight) return;
+          _signInInFlight = false;
           AppSnackbar.error(context, _friendlyAuthError(err));
         },
       );
