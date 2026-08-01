@@ -91,8 +91,11 @@ class _MainScreenState extends ConsumerState<MainScreen> {
       final isSignedOut = next.value == null && !next.isLoading;
       if (wasSignedIn && isSignedOut && mounted) {
         _signedOut = true;
+        // Send the user to the Mobile Login flow (which is the entry
+        // point in the new mobile-first auth flow). The user can
+        // re-authenticate with a different number or the same one.
         Navigator.of(context, rootNavigator: true).pushNamedAndRemoveUntil(
-          Routes.loginRoute,
+          Routes.mobileLoginRoute,
           (_) => false,
         );
       }

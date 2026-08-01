@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/route/app_route.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../authentication/presentation/providers/auth_providers.dart';
+import '../../subscription/presentation/providers/subscription_providers.dart';
 
 /// First screen a new user sees after the splash. Premium onboarding —
 /// gradient backdrop, soft shadows, animated gradient button.
@@ -28,11 +28,15 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     if (_busy.value) return;
     _busy.value = true;
     try {
-      await ref.read(authRepositoryProvider).markOnboardingComplete();
+      // Mark onboarding done via the new SessionManager so the splash
+      // route is correct on the next launch.
+      await ref
+          .read(sessionManagerProvider)
+          .markOnboardingComplete();
       if (!mounted) return;
       Navigator.pushNamedAndRemoveUntil(
         context,
-        Routes.loginRoute,
+        Routes.mobileLoginRoute,
         (route) => route.isFirst,
       );
     } finally {

@@ -21,7 +21,7 @@ class CalendarScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-      appBar: const NotelyAppBar(title: 'Calendar'),
+      appBar: const NotelyAppBar(title: 'Calendar',),
       body: ListView(
         physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),

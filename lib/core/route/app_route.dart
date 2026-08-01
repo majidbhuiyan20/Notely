@@ -3,6 +3,9 @@ import 'package:notely/features/analytics/view/analytics_screen.dart';
 import 'package:notely/features/authentication/presentation/view/login_screen.dart';
 import 'package:notely/features/category/view/category_details_screen.dart';
 import 'package:notely/features/category/view/category_screen.dart';
+import 'package:notely/features/subscription/presentation/view/google_login_screen.dart';
+import 'package:notely/features/subscription/presentation/view/mobile_login_screen.dart';
+import 'package:notely/features/subscription/presentation/view/otp_verification_screen.dart';
 import 'package:notely/features/task/view/create_task_screen.dart';
 import 'package:notely/features/task/view/edit_task_screen.dart';
 import 'package:notely/features/task/view/task_screen.dart';
@@ -15,7 +18,17 @@ class Routes {
   static const String splashRoute = "/";
   static const String onboardingRoute = "/onboarding";
   static const String mainRoute = "/main";
+
+  // Kept for backwards compatibility — features that used to push
+  // "/login" should now push "/mobile" (which is the first step in
+  // the new mobile-first flow). The route name itself still works
+  // because the existing LoginScreen is preserved as the final
+  // "Google" sign-in surface.
   static const String loginRoute = "/login";
+  static const String mobileLoginRoute = "/mobile";
+  static const String otpRoute = "/otp";
+  static const String googleLoginRoute = "/google";
+
   static const String categoryRoute = "/category";
   static const String categoryDetailsRoute = "/categoryDetails";
   static const String taskRoute = "/task";
@@ -31,6 +44,15 @@ class RouteGenerator {
         return MaterialPageRoute(builder: (_) => const SplashScreen());
       case Routes.loginRoute:
         return MaterialPageRoute(builder: (_) => const LoginScreen());
+      case Routes.mobileLoginRoute:
+        return MaterialPageRoute(builder: (_) => const MobileLoginScreen());
+      case Routes.otpRoute:
+        final mobile = (routeSettings.arguments as String?) ?? '';
+        return MaterialPageRoute(
+          builder: (_) => OtpVerificationScreen(mobileNumber: mobile),
+        );
+      case Routes.googleLoginRoute:
+        return MaterialPageRoute(builder: (_) => const GoogleLoginScreen());
       case Routes.onboardingRoute:
         return MaterialPageRoute(builder: (_) => const OnboardingScreen());
       case Routes.mainRoute:

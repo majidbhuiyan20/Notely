@@ -3,15 +3,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/route/app_route.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../authentication/presentation/providers/auth_providers.dart';
+import '../../subscription/domain/entities/mobile_session.dart';
+import '../../subscription/presentation/providers/auth_notifier.dart';
 
-/// Brand splash. Waits for the bootstrap state (cached auth user +
-/// onboarding completion flag) to load, then routes to the right
-/// destination:
+/// Brand splash. Waits for the mobile-then-google session to load, then
+/// routes to the right destination:
 ///
-/// * Authenticated user             → Main
-/// * New user (no onboarding yet)   → Onboarding
-/// * Returning, not signed in user  → Login
+/// * isMobileLoggedIn && isGoogleLoggedIn → Main
+/// * isMobileLoggedIn && !isGoogleLoggedIn → Google Login
+/// * !isMobileLoggedIn && isOnboardingCompleted → Mobile Login
+/// * !isOnboardingCompleted → Onboarding
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
@@ -20,48 +21,40 @@ class SplashScreen extends ConsumerStatefulWidget {
 }
 
 class _SplashScreenState extends ConsumerState<SplashScreen> {
-  ProviderSubscription<AsyncValue<BootState>>? _sub;
+  bool _navigated = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _sub = ref.listenManual<AsyncValue<BootState>>(
-        bootStateProvider,
-        (prev, next) {
-          if (!mounted) return;
-          if (next.hasValue) {
-            _sub?.close();
-            _route(next.requireValue);
-            return;
-          }
-          if (next.hasError) {
-            // If the bootstrap future fails (corrupt prefs, plugin
-            // missing, etc.) fall through to the Login screen so the
-            // user isn't stuck on the splash.
-            _sub?.close();
-            Navigator.pushReplacementNamed(context, Routes.loginRoute);
-          }
-        },
-        fireImmediately: true,
-      );
+      if (mounted) _boot();
     });
   }
 
-  void _route(BootState boot) {
-    if (boot.isAuthenticated) {
-      Navigator.pushReplacementNamed(context, Routes.mainRoute);
-    } else if (!boot.onboardingComplete) {
-      Navigator.pushReplacementNamed(context, Routes.onboardingRoute);
-    } else {
-      Navigator.pushReplacementNamed(context, Routes.loginRoute);
-    }
+  Future<void> _boot() async {
+    // Touch the new auth notifier so it loads the persisted mobile
+    // session into memory before the splash decides where to route.
+    final MobileSession session = await ref
+        .read(subscriptionAuthNotifierProvider.notifier)
+        .loadSession();
+
+    if (!mounted) return;
+    _route(session);
   }
 
-  @override
-  void dispose() {
-    _sub?.close();
-    super.dispose();
+  void _route(MobileSession session) {
+    if (_navigated || !mounted) return;
+    _navigated = true;
+
+    if (session.isMobileLoggedIn && session.isGoogleLoggedIn) {
+      Navigator.pushReplacementNamed(context, Routes.mainRoute);
+    } else if (session.isMobileLoggedIn) {
+      Navigator.pushReplacementNamed(context, Routes.googleLoginRoute);
+    } else if (session.isOnboardingCompleted) {
+      Navigator.pushReplacementNamed(context, Routes.mobileLoginRoute);
+    } else {
+      Navigator.pushReplacementNamed(context, Routes.onboardingRoute);
+    }
   }
 
   @override
