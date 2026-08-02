@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
+import '../../model/category_icons.dart';
 import '../../model/note_data.dart';
 import '../../../../core/constants/app_colors.dart';
 
@@ -83,7 +84,7 @@ class TaskRow {
       colorValue: (row['color_value'] as int?) ??
           AppColors.royalBlue.toARGB32(),
       iconCodePoint: (row['icon_code_point'] as int?) ??
-          Icons.note_alt_outlined.codePoint,
+          CategoryIcons.defaultIcon.codePoint,
       statusIndex: (row['status_index'] as int?) ?? 0,
       priorityIndex: (row['priority_index'] as int?) ?? 1,
       dueDate: (row['due_date'] as String?) ?? '',
@@ -105,7 +106,7 @@ class TaskRow {
       description: description,
       category: category,
       categoryColor: Color(colorValue),
-      categoryIcon: IconData(iconCodePoint, fontFamily: 'MaterialIcons'),
+      categoryIcon: CategoryIcons.resolve(iconCodePoint),
       status: NoteStatus.values[
           statusIndex.clamp(0, NoteStatus.values.length - 1)],
       priority: NotePriority.values[
