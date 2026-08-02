@@ -192,6 +192,7 @@ class _SplashHeroState extends State<_SplashHero>
             Container(
               width: 124,
               height: 124,
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.16),
                 borderRadius: BorderRadius.circular(36),
@@ -203,11 +204,11 @@ class _SplashHeroState extends State<_SplashHero>
                   ),
                 ],
               ),
-              child: const Center(
-                child: Icon(
-                  Icons.auto_awesome_rounded,
-                  size: 56,
-                  color: Colors.white,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(22),
+                child: Image.asset(
+                  'assets/images/logo.png',
+                  fit: BoxFit.contain,
                 ),
               ),
             ),
