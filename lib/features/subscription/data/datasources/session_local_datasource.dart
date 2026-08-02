@@ -10,6 +10,18 @@ import '../models/mobile_session_model.dart';
 /// All keys live under a single root so we can wipe the entire
 /// feature in one `prefs.remove(...)` call during unsubscribe /
 /// logout.
+///
+/// **Auth flags vs. in-flight data** — we deliberately separate the
+/// two:
+///
+///   * `isMobileLoggedIn`, `isGoogleLoggedIn`, `isOnboardingCompleted`,
+///     `isSubscribed` are **authentication flags**. Once written, the
+///     splash trusts them to decide routing. They are only written
+///     after a step completes successfully.
+///   * `referenceNo` is **in-flight data** — it lets the OTP screen
+///     recover the carrier reference after a hot-restart but does
+///     NOT imply the user has authenticated.
+///   * `mobileNumber` is **in-flight data** — same rule.
 class SessionLocalDataSource {
   SessionLocalDataSource({SharedPreferences? prefs}) : _prefsOverride = prefs;
 
@@ -17,6 +29,7 @@ class SessionLocalDataSource {
   static const String _mobileKey = '$_rootKey.mobile';
   static const String _googleKey = '$_rootKey.google';
   static const String _onboardingKey = '$_rootKey.onboarding';
+  static const String _subscribedKey = '$_rootKey.subscribed';
 
   // Detail keys (so we can update individual fields without rewriting
   // the entire blob — handy when only one field changes).
@@ -62,6 +75,7 @@ class SessionLocalDataSource {
       isMobileLoggedIn: prefs.getBool(_mobileKey) ?? false,
       isGoogleLoggedIn: prefs.getBool(_googleKey) ?? false,
       isOnboardingCompleted: prefs.getBool(_onboardingKey) ?? false,
+      isSubscribed: prefs.getBool(_subscribedKey) ?? false,
       mobileNumber: prefs.getString(_mobileNumberKey),
       subscriberId: prefs.getString(_subscriberIdKey),
       subscriptionStatus: prefs.getString(_subscriptionStatusKey),
@@ -84,6 +98,7 @@ class SessionLocalDataSource {
     await prefs.setBool(_mobileKey, session.isMobileLoggedIn);
     await prefs.setBool(_googleKey, session.isGoogleLoggedIn);
     await prefs.setBool(_onboardingKey, session.isOnboardingCompleted);
+    await prefs.setBool(_subscribedKey, session.isSubscribed);
     if (session.mobileNumber != null) {
       await prefs.setString(_mobileNumberKey, session.mobileNumber!);
     }
@@ -128,6 +143,7 @@ class SessionLocalDataSource {
       _mobileKey,
       _googleKey,
       _onboardingKey,
+      _subscribedKey,
       _mobileNumberKey,
       _subscriberIdKey,
       _subscriptionStatusKey,

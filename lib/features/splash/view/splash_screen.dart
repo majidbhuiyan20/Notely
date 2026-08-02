@@ -5,14 +5,37 @@ import '../../../core/route/app_route.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../subscription/domain/entities/mobile_session.dart';
 import '../../subscription/presentation/providers/auth_notifier.dart';
+import '../../subscription/presentation/providers/subscription_providers.dart';
 
-/// Brand splash. Waits for the mobile-then-google session to load, then
-/// routes to the right destination:
+/// Brand splash. Waits for the persisted mobile-then-google
+/// session to load, then routes to the right destination.
 ///
-/// * isMobileLoggedIn && isGoogleLoggedIn → Main
-/// * isMobileLoggedIn && !isGoogleLoggedIn → Google Login
-/// * !isMobileLoggedIn && isOnboardingCompleted → Mobile Login
-/// * !isOnboardingCompleted → Onboarding
+/// ## Routing invariants
+/// Routing is driven **exclusively** by persisted auth flags —
+/// never by in-flight data:
+///
+/// * `isMobileLoggedIn` + `isGoogleLoggedIn` → Main
+/// * `isMobileLoggedIn` + `isSubscribed` + !`isGoogleLoggedIn` →
+///   Google Login (skip OTP — the user already verified mobile)
+/// * `isOnboardingCompleted` + no mobile login → Mobile Login
+/// * Otherwise → Onboarding
+///
+/// The splash **must not** route to the Google Login screen based on
+/// non-auth fields like `referenceNo` (a stale in-flight OTP) or
+/// `mobileNumber` (typed in but never verified). Only auth flags
+/// persisted by `SessionManager.markMobileVerified` /
+/// `markAlreadySubscribed` count.
+///
+/// ## Subscription re-validation
+/// The carrier can deactivate a subscription at any time (user
+/// cancels via USSD, billing failure, etc.). When the splash starts
+/// and we already have a mobile-validated session, we re-run
+/// `check_subscription.php` against the carrier. If the carrier
+/// reports the subscription is no longer active we clear the
+/// `isMobileLoggedIn` flag and route to the Mobile Login screen —
+/// without this check, a long-time user whose subscription silently
+/// expired would land on the Google Login screen with an invalid
+/// backend state.
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
@@ -39,22 +62,73 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
         .loadSession();
 
     if (!mounted) return;
+
+    // If the persisted session claims a mobile-verified user, ask
+    // the carrier to confirm the subscription is still active
+    // before we trust the cached flag. This is the only place in
+    // the app where we re-validate on every cold start.
+    if (session.isMobileLoggedIn && session.mobileNumber != null) {
+      await _revalidateSubscription(session);
+      if (!mounted) return;
+    }
+
     _route(session);
   }
 
-  void _route(MobileSession session) {
+  /// Re-runs `check_subscription.php`. If the carrier says the user
+  /// is no longer subscribed, we drop the auth flags so the splash
+  /// routes to the Mobile Login screen instead of the Google Login
+  /// screen. We collect and ignore any errors — if the network is
+  /// down at startup we fall back to the cached flags rather than
+  /// locking the user out.
+  Future<void> _revalidateSubscription(MobileSession session) async {
+    final notifier = ref.read(subscriptionAuthNotifierProvider.notifier);
+    final useCase = ref.read(checkSubscriptionUseCaseProvider);
+    try {
+      final status = await useCase(session.mobileNumber!);
+      if (!status.isOk || !status.isSubscribed) {
+        // Subscription no longer active — clear the cached auth
+        // flags so the splash routes to Mobile Login.
+        await notifier.clearMobileAuth();
+      }
+    } catch (_) {
+      // Network error during cold start — keep the cached session
+      // so the user isn't locked out of a working app.
+    }
+  }
+
+  void _route(MobileSession originalSession) {
     if (_navigated || !mounted) return;
     _navigated = true;
 
+    // After re-validation the session in the notifier may have been
+    // cleared. Re-read it so we route based on the up-to-date flags.
+    final session = ref
+            .read(subscriptionAuthNotifierProvider.notifier)
+            .currentSession ??
+        originalSession;
+
+    // 1. Fully authenticated → Home.
     if (session.isMobileLoggedIn && session.isGoogleLoggedIn) {
       Navigator.pushReplacementNamed(context, Routes.mainRoute);
-    } else if (session.isMobileLoggedIn) {
-      Navigator.pushReplacementNamed(context, Routes.googleLoginRoute);
-    } else if (session.isOnboardingCompleted) {
-      Navigator.pushReplacementNamed(context, Routes.mobileLoginRoute);
-    } else {
-      Navigator.pushReplacementNamed(context, Routes.onboardingRoute);
+      return;
     }
+
+    // 2. Mobile verified & subscribed but Google not yet done →
+    //    Google Login (skip OTP entirely).
+    if (session.isMobileLoggedIn && session.isSubscribed) {
+      Navigator.pushReplacementNamed(context, Routes.googleLoginRoute);
+      return;
+    }
+
+    // 3. Onboarding complete but mobile not verified → Mobile Login.
+    if (session.isOnboardingCompleted) {
+      Navigator.pushReplacementNamed(context, Routes.mobileLoginRoute);
+      return;
+    }
+
+    // 4. First launch → Onboarding.
+    Navigator.pushReplacementNamed(context, Routes.onboardingRoute);
   }
 
   @override

@@ -74,99 +74,113 @@ class _GoogleLoginScreenState extends ConsumerState<GoogleLoginScreen> {
         children: [
           const _Backdrop(),
           SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(28, 24, 28, 24),
-              child: Column(
-                children: [
-                  const Spacer(flex: 2),
-                  const _BrandHeader(),
-                  const Spacer(flex: 1),
-                  if (masked != null) ...[
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.9),
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: AppElevation.cardShadow,
-                      ),
-                      child: Row(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(28, 24, 28, 24),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight - 48,
+                    ),
+                    child: IntrinsicHeight(
+                      child: Column(
                         children: [
-                          Container(
-                            width: 36,
-                            height: 36,
-                            decoration: BoxDecoration(
-                              color: AppColors.success.withValues(alpha: 0.14),
-                              borderRadius: BorderRadius.circular(10),
+                          const Spacer(flex: 2),
+                          const _BrandHeader(),
+                          const Spacer(flex: 1),
+                          if (masked != null) ...[
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 12,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.9),
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: AppElevation.cardShadow,
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 36,
+                                    height: 36,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.success
+                                          .withValues(alpha: 0.14),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: const Icon(
+                                      Icons.check_circle_rounded,
+                                      color: AppColors.success,
+                                      size: 20,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          'Mobile verified',
+                                          style: TextStyle(
+                                            fontSize: 12.5,
+                                            fontWeight: FontWeight.w700,
+                                            color: AppColors.textSecondary,
+                                          ),
+                                        ),
+                                        Text(
+                                          '+880$masked',
+                                          style: const TextStyle(
+                                            fontSize: 14.5,
+                                            fontWeight: FontWeight.w800,
+                                            color: AppColors.textPrimary,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                            child: const Icon(
-                              Icons.check_circle_rounded,
-                              color: AppColors.success,
-                              size: 20,
+                            const SizedBox(height: 24),
+                          ],
+                          _PrimaryGoogleButton(
+                            isLoading: isSigningIn,
+                            onPressed: () => ref
+                                .read(authNotifierProvider.notifier)
+                                .signInWithGoogle(),
+                          ),
+                          const SizedBox(height: 12),
+                          TextButton(
+                            onPressed: isSigningIn
+                                ? null
+                                : () {
+                                    Navigator.pushNamed(
+                                      context,
+                                      Routes.mobileLoginRoute,
+                                    );
+                                  },
+                            child: const Text('Use a different number'),
+                          ),
+                          const SizedBox(height: 12),
+                          const Text(
+                            'By continuing you agree to our Terms & Privacy Policy.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textTertiary,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Mobile verified',
-                                  style: TextStyle(
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.textSecondary,
-                                  ),
-                                ),
-                                Text(
-                                  '+880$masked',
-                                  style: const TextStyle(
-                                    fontSize: 14.5,
-                                    fontWeight: FontWeight.w800,
-                                    color: AppColors.textPrimary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
+                          const Spacer(flex: 1),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 24),
-                  ],
-                  _PrimaryGoogleButton(
-                    isLoading: isSigningIn,
-                    onPressed: () => ref
-                        .read(authNotifierProvider.notifier)
-                        .signInWithGoogle(),
                   ),
-                  const SizedBox(height: 12),
-                  TextButton(
-                    onPressed: isSigningIn
-                        ? null
-                        : () {
-                            Navigator.pushNamed(
-                              context,
-                              Routes.mobileLoginRoute,
-                            );
-                          },
-                    child: const Text('Use a different number'),
-                  ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'By continuing you agree to our Terms & Privacy Policy.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textTertiary,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const Spacer(flex: 1),
-                ],
-              ),
+                );
+              },
             ),
           ),
         ],

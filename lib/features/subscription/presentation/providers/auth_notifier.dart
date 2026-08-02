@@ -18,16 +18,27 @@ import 'subscription_providers.dart';
 ///
 /// The state machine walks the user through:
 ///
-///   1. `checkSubscription(mobile)` — if `isSubscribed`, skip OTP.
+///   1. `checkSubscription(mobile)` — if `isSubscribed`, mark
+///      mobile-verified and skip OTP.
 ///   2. `sendOtp(mobile)`           — only if step 1 returned false.
-///   3. `verifyOtp(mobile, otp, refNo)` — confirm OTP, store session.
-///   4. `signInWithGoogle()`        — Firebase/Google; store session.
+///      Persists a **pending** OTP session (no auth flags).
+///   3. `verifyOtp(mobile, otp)`    — confirm OTP. On success AND
+///      `isSubscribed`, mark mobile-verified.
+///   4. `signInWithGoogle()`        — Firebase/Google; persist Google.
 ///   5. `unsubscribeAndLogout()`    — wipes everything.
 ///
-/// All persistence flows through [SessionManager]. All API calls
-/// flow through the use-case providers. The notifier itself never
-/// touches Dio, Firebase, or SharedPreferences directly — that's the
-/// whole point of Clean Architecture.
+/// ## Auth-flag invariants
+/// `isMobileLoggedIn` and `isSubscribed` are **only** flipped to
+/// `true` in two places — both at the bottom of this file:
+///
+///   * `submitMobileNumber` when `check_subscription.php` says
+///     `isSubscribed`.
+///   * `verifyOtp` when `verify_otp.php` says success AND
+///     `isSubscribed`.
+///
+/// Sending an OTP — even successfully, even when the API returns a
+/// `referenceNo` — does NOT set these flags. A wrong OTP must NOT
+/// leave any persistent trace of "the user has logged in".
 class AuthNotifier extends Notifier<AuthState> {
   late final SessionManager _session;
   late final GoogleSignIn _google;
@@ -57,7 +68,9 @@ class AuthNotifier extends Notifier<AuthState> {
   // ─── Boot (splash) ─────────────────────────────────────────────
 
   /// Called by the splash screen. Loads the persisted session and
-  /// returns a suggested initial state — UI then navigates.
+  /// returns it so the splash can route based on **persisted auth
+  /// flags only** — never on in-flight data like a pending
+  /// `referenceNo`.
   Future<MobileSession> loadSession() async {
     _mobileSession = await _session.loadSession();
     return _mobileSession!;
@@ -72,6 +85,16 @@ class AuthNotifier extends Notifier<AuthState> {
   /// We translate it to the API format (`8801712345678`) at the
   /// edge so the rest of the app never has to know about the wire
   /// format.
+  ///
+  /// Persistence rules:
+  ///
+  /// * If the carrier says `isSubscribed == true` we mark the user
+  ///   as mobile-verified (`isMobileLoggedIn=true`) — this is one of
+  ///   the only two places that flips the flag.
+  /// * If the carrier says NOT subscribed, we send an OTP. The
+  ///   resulting `referenceNo` is stored in **pending** state
+  ///   (`savePendingOtpSession`) — `isMobileLoggedIn` is NOT set.
+  ///   A wrong OTP therefore leaves no persistent auth trace.
   Future<void> submitMobileNumber(String localMobile) async {
     final validation = Validators.mobileNumber(localMobile);
     if (validation != null) {
@@ -87,10 +110,9 @@ class AuthNotifier extends Notifier<AuthState> {
       final status = await useCase(apiMobile);
 
       if (status.isOk && status.isSubscribed) {
-        // Persist mobile-side session now — the user has proven they
-        // own the number, and we want to keep the subscriberId around
-        // for the Google step and the Profile screen.
-        _mobileSession = await _session.saveMobileSession(
+        // The carrier already confirms this number is subscribed.
+        // Flip the auth flags and route to the Google login.
+        _mobileSession = await _session.markAlreadySubscribed(
           mobileNumber: apiMobile,
           subscriberId: status.subscriberId,
           subscriptionStatus: status.subscriptionStatus,
@@ -118,6 +140,9 @@ class AuthNotifier extends Notifier<AuthState> {
       //
       //   3. Any other error                      — surface the server
       //      message as a user-friendly snackbar.
+      //
+      // In **both** successful cases we persist a *pending* OTP
+      // session. `isMobileLoggedIn` is NOT touched.
       if (otpResponse.isAlreadyRegistered &&
           otpResponse.subscriberId.isNotEmpty) {
         // Extract the bare number from the `tel:8801828931039` prefix
@@ -128,17 +153,17 @@ class AuthNotifier extends Notifier<AuthState> {
             ? otpResponse.subscriberId.substring(4)
             : otpResponse.subscriberId;
         _referenceNo = refFromSub;
-        _mobileSession = await _session.saveMobileSession(
+        _mobileSession = await _session.savePendingOtpSession(
           mobileNumber: apiMobile,
+          referenceNo: refFromSub,
           subscriberId: otpResponse.subscriberId,
           subscriptionStatus: 'ALREADY REGISTERED',
-          referenceNo: refFromSub,
         );
         developer.log(
-          'sendOtp(E1351) → using subscriberId as referenceNo=$refFromSub',
+          'sendOtp(E1351) → using subscriberId as referenceNo=$refFromSub '
+          '(pending; isMobileLoggedIn NOT set)',
           name: 'Auth',
         );
-        // Still navigate to the OTP screen so the user can verify.
         state = const AuthOtpSent();
         return;
       }
@@ -148,19 +173,15 @@ class AuthNotifier extends Notifier<AuthState> {
       // screen.
       if (otpResponse.success && otpResponse.referenceNo != null) {
         _referenceNo = otpResponse.referenceNo;
-        // Persist the full mobile-session atomically: the reference
-        // number, the mobile, and the subscriberId all together. This
-        // avoids the "wipe referenceNo" race that would happen if we
-        // called `saveReferenceNo` followed by `saveMobileSession`
-        // (the latter would overwrite `referenceNo: null`).
-        _mobileSession = await _session.saveMobileSession(
+        _mobileSession = await _session.savePendingOtpSession(
           mobileNumber: apiMobile,
+          referenceNo: _referenceNo!,
           subscriberId: otpResponse.subscriberId,
           subscriptionStatus: 'PENDING OTP',
-          referenceNo: _referenceNo,
         );
         developer.log(
-          'sendOtp(ok) → referenceNo=$_referenceNo',
+          'sendOtp(ok) → referenceNo=$_referenceNo '
+          '(pending; isMobileLoggedIn NOT set)',
           name: 'Auth',
         );
         state = const AuthOtpSent();
@@ -184,8 +205,11 @@ class AuthNotifier extends Notifier<AuthState> {
   Future<void> verifyOtp(String localMobile, String otp) async {
     // In-memory reference is the source of truth, but if the user
     // hot-restarted the app between sending and verifying the OTP
-    // we may have lost it. Fall back to the persisted session in
-    // that case so they don't have to re-enter their number.
+    // we may have lost it. Fall back to the persisted pending
+    // session in that case so they don't have to re-enter their
+    // number. **Important**: a non-null `referenceNo` here is *in
+    // flight*, not authenticated — we never set `isMobileLoggedIn`
+    // based on it.
     var referenceNo = _referenceNo;
     if (referenceNo == null) {
       final session = _mobileSession ?? await _session.loadSession();
@@ -211,10 +235,13 @@ class AuthNotifier extends Notifier<AuthState> {
     final apiMobile = Validators.toApiMobile(localMobile);
     state = const AuthVerifyingOtp();
 
-    // Debug trail — handy when the server complains. The fields
-    // here are exactly the ones the API expects in the request body.
+    // Debug trail — handy when the server complains. We log the
+    // OTP length and a masked reference number rather than the raw
+    // values, so a leaked logcat/console never exposes a usable
+    // verification code.
     developer.log(
-      'verifyOtp → mobile=$apiMobile otp=$otp refNo=$referenceNo',
+      'verifyOtp → mobile=$apiMobile otp.len=${otp.length} '
+      'refNo=${_maskRef(referenceNo)}',
       name: 'Auth',
     );
 
@@ -230,11 +257,15 @@ class AuthNotifier extends Notifier<AuthState> {
         'verifyOtp ← statusCode=${result.statusCode} '
         'statusDetail=${result.statusDetail} '
         'subscriptionStatus=${result.subscriptionStatus} '
-        'subscriberId=${result.subscriberId}',
+        'subscriberId=${_maskSub(result.subscriberId)} '
+        'isSubscribed=${result.isSubscribed}',
         name: 'Auth',
       );
 
       if (!result.isOk) {
+        // Wrong / expired OTP. Do NOT touch any auth flag — just
+        // surface the error so the OTP screen can keep the user on
+        // the OTP screen.
         state = AuthError(
           result.statusDetail.isNotEmpty
               ? result.statusDetail
@@ -243,11 +274,28 @@ class AuthNotifier extends Notifier<AuthState> {
         return;
       }
 
-      _mobileSession = await _session.saveMobileSession(
+      // After OTP verification, the carrier returns an `isSubscribed`
+      // flag. When true the user is fully subscribed and we flip
+      // the auth flags. When false we surface a friendly error and
+      // leave the auth flags alone.
+      if (!result.isSubscribed) {
+        developer.log(
+          'verifyOtp → isSubscribed=false after OTP, blocking flow',
+          name: 'Auth',
+        );
+        state = const AuthError(
+          'Subscription is not active. Please retry the verification.',
+        );
+        return;
+      }
+
+      // SUCCESS — this is the **only** place in the OTP flow that
+      // sets `isMobileLoggedIn = true`. Persisting auth flags here
+      // means a wrong OTP cannot leave a persistent auth trace.
+      _mobileSession = await _session.markMobileVerified(
         mobileNumber: apiMobile,
         subscriberId: result.subscriberId,
         subscriptionStatus: result.subscriptionStatus,
-        referenceNo: referenceNo,
       );
       _referenceNo = null; // consumed
       state = const AuthOtpVerified();
@@ -259,6 +307,9 @@ class AuthNotifier extends Notifier<AuthState> {
   /// Re-issues an OTP using the cached reference number. The mobile
   /// number is required because the API takes it as a field; we read
   /// it from the persisted session.
+  ///
+  /// Like `submitMobileNumber`, this only persists *pending* data —
+  /// it never touches the auth flags.
   Future<void> resendOtp() async {
     final session = _mobileSession ?? await _session.loadSession();
     final mobile = session.mobileNumber;
@@ -292,6 +343,12 @@ class AuthNotifier extends Notifier<AuthState> {
   /// touch `AuthRemoteDataSource.signInWithGoogle` directly — we go
   /// through the notifier in `auth_providers.dart` so the rest of
   /// the app keeps its single source of truth for the Google user.
+  ///
+  /// Pre-condition: by the time the user reaches this screen the
+  /// mobile-session auth flags are already `true` (either via
+  /// `check_subscription.php` → `markAlreadySubscribed` or via
+  /// `verify_otp.php` → `markMobileVerified`). We only persist the
+  /// Google side here.
   Future<void> signInWithGoogle() async {
     state = const AuthGoogleSigningIn();
     try {
@@ -381,8 +438,58 @@ class AuthNotifier extends Notifier<AuthState> {
     state = const AuthInitial();
   }
 
+  /// Drops the cached mobile-auth flags (**isMobileLoggedIn**,
+  /// **isSubscribed**) without touching the Google or onboarding
+  /// flags, and without contacting the carrier. Used by the splash
+  /// screen when `check_subscription.php` reports the subscription
+  /// is no longer active. The user is then routed to the Mobile
+  /// Login screen so they can re-verify.
+  ///
+  /// We deliberately keep the user's `mobileNumber` and
+  /// `subscriberId` in prefs so the verifier can pre-fill the field
+  /// on the next login attempt.
+  Future<void> clearMobileAuth() async {
+    final current = _mobileSession ?? await _session.loadSession();
+    final next = MobileSession(
+      isMobileLoggedIn: false,
+      isGoogleLoggedIn: current.isGoogleLoggedIn,
+      isOnboardingCompleted: current.isOnboardingCompleted,
+      isSubscribed: false,
+      mobileNumber: current.mobileNumber,
+      subscriberId: current.subscriberId,
+      subscriptionStatus: current.subscriptionStatus,
+      firebaseUid: current.firebaseUid,
+      email: current.email,
+      displayName: current.displayName,
+      photoUrl: current.photoUrl,
+      loginDate: current.loginDate,
+      referenceNo: null,
+    );
+    await _session.saveMobileOffline(next);
+    _mobileSession = await _session.loadSession();
+  }
+
   String _friendly(Object error) {
     return ref.read(friendlyErrorMapperProvider).map(error);
+  }
+
+  /// Mask a carrier `referenceNo` for logging. The full value is
+  /// only ever needed by `verify_otp.php` over HTTPS — leaking it to
+  /// logs would let a developer with logcat access replay the
+  /// verification step. We keep the first two and last two chars.
+  static String _maskRef(String ref) {
+    if (ref.length <= 6) return '•••';
+    return '${ref.substring(0, 2)}•••${ref.substring(ref.length - 2)}';
+  }
+
+  /// Mask a `subscriberId` (which is itself a `tel:880XXXXXXXXX`
+  /// string) for logging. Logs frequently capture build numbers and
+  /// error tags, so it's worth keeping the carrier prefix out of
+  /// them too.
+  static String _maskSub(String sub) {
+    if (sub.isEmpty) return '';
+    if (sub.length <= 6) return '•••';
+    return '${sub.substring(0, 4)}•••${sub.substring(sub.length - 3)}';
   }
 }
 
